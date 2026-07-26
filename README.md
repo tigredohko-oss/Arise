@@ -1,4 +1,4 @@
-# ARISE v8.1
+# ARISE v8.2
 
 Un solo archivo HTML + los assets del avatar. Sin dependencias, sin red, sin analítica.
 
@@ -10,21 +10,27 @@ Los `assets/` ya están en el root del repo. Solo hace falta reemplazar `index.h
 
 1. Abre `index.html` en el repo → icono de bote de basura → **Commit changes**
 2. **Add file → Upload files** → sube el `index.html` nuevo → **Commit changes**
-3. Espera 1-2 min y recarga `https://tigredohko-oss.github.io/Arise/`
-4. Verifica que arriba a la derecha diga **v8.1**
+3. Espera 1-2 min y recarga la URL. Verifica que arriba a la derecha diga **v8.2**
 
-## Novedades v8.1
+## Novedades v8.2
 
-**La lectura de medidas depende de la fase.** En MEDIDAS eliges CORTE / VOLUMEN /
-MANTENIMIENTO. En corte, bajar peso es la meta y el rango que protege músculo es
-0.5–1% del peso corporal por semana. Antes la app leía todo como volumen y te habría
-dicho que bajar peso era "superávit insuficiente" — exactamente al revés.
+**Legibilidad.** Ningún texto por debajo de 11.5px (antes había a 8px) y todo el texto
+cumple contraste AA de WCAG. La prosa dejó de ser monoespaciada. En DATA hay un control
+de tamaño de texto A / A+ / A++ que escala toda la app.
 
-## v8.0
+**Glosario.** Botón `? GLOSARIO` en el header con los 16 términos que la app abrevia.
+Los acrónimos de la pantalla de entrenamiento (BOSS, PR, STR/AGI) se tocan y se traducen.
 
-Generador de rutinas determinista (RUTINA → ⚡ GENERAR RUTINA) con auditoría de volumen
-y tiempo. Módulo de dolor de 4 capas: sustituye ejercicios sin eliminar patrones ni bajar
-volumen, con semáforo post-sesión. Es un filtro de selección, no un diagnóstico.
+**Fichas de técnica para todos.** Los 72 ejercicios del generador tienen pasos, clave
+técnica y error común, en español. Antes ninguno tenía. La rutina v5 también las recibe.
+Cada ficha lleva un enlace a búsqueda de video, en lugar de imágenes con licencia ajena.
+
+**El dolor ya no impide entrenar.** Las señales de alerta activan MODO CAUTO: la rutina
+se genera igual, con el mínimo impacto posible en las zonas marcadas, y se avisa claro.
+Antes se negaba a generar.
+
+**Ejercicios favoritos.** En el generador eliges los que te gustan y se priorizan al
+armar la rutina. Se agregaron ejercicios con kettlebell (antes no había ninguno).
 
 ## Privacidad
 
