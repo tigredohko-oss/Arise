@@ -1,4 +1,4 @@
-# ARISE v8.4
+# ARISE v8.5
 
 App de una sola página (`index.html`). No necesita servidor, no necesita internet
 después de la primera carga. Tus datos viven en el navegador (`localStorage`),

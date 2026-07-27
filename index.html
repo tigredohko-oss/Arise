@@ -206,6 +206,18 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
 .chip{font-family:var(--mn);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:3px 7px}
 .spark{width:100%;height:52px;display:block;margin-top:6px}
+.cht{width:100%;height:auto;display:block;margin-top:4px;overflow:visible}
+.lgd{display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 4px;font-family:var(--mn);font-size:11px;color:var(--dim)}
+.lgd span{display:flex;align-items:center;gap:5px}
+.lgd i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+.hero{font-family:var(--mn);font-size:30px;line-height:1.1;color:var(--tx);margin:2px 0 1px}
+.hero small{font-size:12px;color:var(--dim2);letter-spacing:.1em}
+.frow{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid rgba(29,43,71,.5)}
+.frow:last-child{border-bottom:none}
+.frow .fn{flex:1;min-width:0;font-size:13px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .fs{width:74px;flex:none}
+.frow .fv{font-family:var(--mn);font-size:12.5px;color:var(--dim);white-space:nowrap;text-align:right;min-width:62px}
+.msp{width:74px;height:22px;display:block}
 
 /* ---------- editor ---------- */
 .dayed{border:1px solid var(--line);border-left:3px solid var(--dc);border-radius:11px;padding:12px;margin-bottom:10px;background:rgba(5,7,15,.42)}
@@ -383,7 +395,7 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 
   <nav>
     <button data-t="quests" class="on">QUESTS</button>
-    <button data-t="stats">STATS</button>
+    <button data-t="stats">PROGRESO</button>
     <button data-t="med">MEDIDAS</button>
     <button data-t="rut">RUTINA</button>
     <button data-t="data">DATA</button>
@@ -408,7 +420,7 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 /* ============================================================
    ARISE v4.0 — rutina editable, días dinámicos
    ============================================================ */
-const APP_VERSION="8.4", SCHEMA=8;
+const APP_VERSION="8.5", SCHEMA=8;
 const NS="arise";
 const K_ACTIVE=NS+":activeProfile", K_PROFILES=NS+":profiles";
 const LEGACY_STATE="arise_v1", LEGACY_BACKUPS="arise_backups";
@@ -1140,6 +1152,14 @@ function sanitizeState(raw){
   out.painLog=asArr(s.painLog).slice(-200).map(x=>{ x=asObj(x);
     return {d:asStr(x.d,10), z:ZONAS.indexOf(x.z)>=0?x.z:"", dur:asNum(x.dur,0), man:asNum(x.man,0)};
   }).filter(x=>x.z&&/^\d{4}-\d{2}-\d{2}$/.test(x.d));
+  /* bitácora de semanas cerradas. Puramente aditiva: si no existe queda vacía y
+     el panel de adherencia simplemente no se dibuja. Nunca se reconstruye hacia
+     atrás — la historia arranca en la primera semana que se cierre con v8.5. */
+  out.weekLog=asArr(s.weekLog).slice(-200).map(x=>{ x=asObj(x);
+    return {w:Math.max(0,Math.round(asNum(x.w,0))), d:asStr(x.d,10),
+            q:Math.max(0,Math.round(asNum(x.q,0))), nd:Math.max(0,Math.round(asNum(x.nd,0))),
+            xp:Math.max(0,Math.round(asNum(x.xp,0))), full:!!x.full};
+  }).filter(x=>x.nd>0&&/^\d{4}-\d{2}-\d{2}$/.test(x.d));
   const sg=asObj(s.settings);
   out.settings={timer:sg.timer!==false,sound:sg.sound!==false,
                 vibrate:sg.vibrate!==false,wake:sg.wake!==false};
@@ -1176,7 +1196,7 @@ function blank(){
     checked:{},weights:{},sets:{},lastWeights:{},allTimeWeights:{},weightHistory:{},
     measurements:[],photos:[],xp:0,xpBase:0,week:1,active:1,weekBonus:false,
     prev:{}, settings:{timer:true,sound:true,vibrate:true,wake:true}, impLast:"",
-    gen:null, proposal:null, pain:{zonas:{},banderas:{}}, painLog:[],
+    gen:null, proposal:null, pain:{zonas:{},banderas:{}}, painLog:[], weekLog:[],
     baselineSeeded:false,lastBackup:null};
 }
 function uid(pfx){ S.uidSeq=(S.uidSeq||0)+1; return pfx+S.uidSeq; }
@@ -1207,6 +1227,7 @@ function upgrade(st){
   st.pain=Object.assign({zonas:{},banderas:{}},asObj(st.pain));
   st.pain.zonas=asObj(st.pain.zonas); st.pain.banderas=asObj(st.pain.banderas);
   if(!Array.isArray(st.painLog)) st.painLog=[];
+  if(!Array.isArray(st.weekLog)) st.weekLog=[];   // 8→8.5: aditivo, sin migración
   st.prev=asObj(st.prev);
   if(from<7){   // arrastra la carga de la semana pasada al formato nuevo {peso, reps}
     const lw=asObj(st.lastWeights);
@@ -1750,9 +1771,279 @@ function purge(id){ delete S.checked[id]; delete S.weights[id]; delete S.sets[id
   delete S.lastWeights[id]; delete S.prev[id]; }
 
 /* ============================================================
-   TAB: STATS
+   GRÁFICAS — SVG inline, sin librerías (la CSP es script-src 'self')
+   ------------------------------------------------------------
+   Paleta de datos: NO se reusan los tokens neón de la UI (--cy/--gd) como
+   marcas. CHART_A y CHART_B pasan los seis checks del validador contra la
+   superficie #0c1222: banda de luminosidad, piso de croma, separación CVD
+   (ΔE 22.5 protan / 21.3 tritan, muy arriba del piso de 8), piso de visión
+   normal y contraste ≥3:1. Si se tocan, hay que revalidarlos.
+   --ok / --bad solo se usan cuando el color SIGNIFICA bien/mal, y siempre
+   acompañados de leyenda escrita — nunca color solo.
+   **Ningún eje doble.** Dos medidas de escala distinta se indexan a la primera
+   lectura = 100 y comparten un solo eje.
+   Esto es una app de teléfono: el hover no existe. La capa interactiva es
+   <title> nativo por marca (escritorio y lector de pantalla) + etiqueta directa
+   en el extremo + la tabla de HISTORIAL. Un tooltip con estado obligaría a
+   re-render y aquí eso roba el foco.
+   ============================================================ */
+const CHART_A="#0d9ed1", CHART_B="#b98a1e";
+const CHART_GRID="rgba(42,63,102,.6)", CHART_INK="#8496b8";
+const dnum=s=>{const p=String(s||"").split("-"); return Date.UTC(+p[0],+p[1]-1,+p[2])/86400000;};
+const dshort=s=>String(s||"").slice(8,10)+"/"+String(s||"").slice(5,7);
+/* halo=true dibuja el texto con un contorno del color de la superficie por debajo
+   (paint-order), para que una etiqueta que cae encima de una línea o un punto siga
+   siendo legible sin tener que moverla a un hueco que quizá no existe. */
+const txt=(x,y,s,anchor,size,fill,halo)=>'<text x="'+x+'" y="'+y+'" '+(anchor?'text-anchor="'+anchor+'" ':'')+
+  'font-size="'+(size||9)+'" fill="'+(fill||CHART_INK)+'" font-family="ui-monospace,monospace"'+
+  (halo?' stroke="#0c1222" stroke-width="3.5" paint-order="stroke" stroke-linejoin="round"':'')+
+  '>'+esc(s)+'</text>';
+let progMetric="weight";
+
+function chartLine(series,opts){
+  opts=opts||{};
+  const W=320,H=opts.h||136,PL=38,PR=12,PT=14,PB=20;
+  const fm=opts.fm||(v=>(Math.round(v*10)/10).toFixed(1));
+  const vals=[]; series.forEach(s=>s.pts.forEach(p=>vals.push(p.v)));
+  if(vals.length<2) return '<div class="muted">Con 2 registros ya se dibuja la tendencia.</div>';
+  let mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  if(opts.ref!=null){ mn=Math.min(mn,opts.ref); mx=Math.max(mx,opts.ref); }
+  const rg=(mx-mn)||Math.abs(mx)*0.1||1; mn-=rg*0.15; mx+=rg*0.15;
+  const n=opts.n||Math.max.apply(null,series.map(s=>s.pts.length));
+  const X=i=>PL+(n<2?(W-PL-PR)/2:(i/(n-1))*(W-PL-PR));
+  const Y=v=>PT+(1-(v-mn)/(mx-mn))*(H-PT-PB);
+  let g='';
+  [0,0.5,1].forEach(f=>{ const v=mn+(mx-mn)*f, y=+Y(v).toFixed(1);   // rejilla sólida, nunca punteada
+    g+='<line x1="'+PL+'" y1="'+y+'" x2="'+(W-PR)+'" y2="'+y+'" stroke="'+CHART_GRID+'" stroke-width="1"/>'+
+       txt(PL-5,(y+3.5).toFixed(1),fm(v),"end"); });
+  /* La línea de referencia es cromo, no una serie: va en tinta neutra para que
+     no se confunda con CHART_B, y anclada a la izquierda porque la derecha es
+     donde viven siempre las etiquetas de extremo. */
+  let refTxt='';
+  if(opts.ref!=null){ const y=+Y(opts.ref).toFixed(1);
+    g+='<line x1="'+PL+'" y1="'+y+'" x2="'+(W-PR)+'" y2="'+y+'" stroke="rgba(132,150,184,.75)" stroke-width="1"/>';
+    /* la etiqueta se pinta al final: si va aquí, el primer marcador de la serie
+       le cae encima y ni el halo la salva */
+    refTxt=txt(PL+4,(y-4).toFixed(1),opts.refLabel||"","start",9,CHART_INK,true); }
+  series.forEach(s=>{
+    const col=safeColor(s.c), pts=s.pts.slice().sort((a,b)=>a.i-b.i);
+    g+='<polyline points="'+pts.map(p=>X(p.i).toFixed(1)+","+Y(p.v).toFixed(1)).join(" ")+
+       '" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    pts.forEach(p=>{ g+='<circle cx="'+X(p.i).toFixed(1)+'" cy="'+Y(p.v).toFixed(1)+'" r="4" fill="'+col+
+       '" stroke="#0c1222" stroke-width="1.8"><title>'+esc(s.n+" · "+(p.t||"")+" · "+fm(p.v))+'</title></circle>'; });
+    const lp=pts[pts.length-1];                       // etiqueta directa solo en el extremo
+    g+=txt((X(lp.i)-6).toFixed(1),(Y(lp.v)-10).toFixed(1),fm(lp.v),"end",10.5,"#a3b4d2",true);
+  });
+  const p0=series[0].pts[0], pN=series[0].pts[series[0].pts.length-1];
+  g+=refTxt+txt(PL,H-5,dshort(p0.t))+txt(W-PR,H-5,dshort(pN.t),"end");
+  const leg=series.length>1
+    ? '<div class="lgd">'+series.map(s=>'<span><i style="background:'+safeColor(s.c)+'"></i>'+esc(s.n)+'</span>').join("")+'</div>'
+    : '';
+  return leg+'<svg class="cht" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.alt||"")+'">'+g+'</svg>';
+}
+
+function chartBars(items,opts){
+  opts=opts||{};
+  if(!items.length) return '';
+  const W=320,H=opts.h||140,PL=38,PR=12,PT=14,PB=20;
+  const fm=opts.fm||(v=>(Math.round(v*100)/100).toFixed(2));
+  const vals=items.map(x=>x.v).concat([0]);
+  if(opts.band) vals.push(opts.band.lo,opts.band.hi);
+  let mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  const rg=(mx-mn)||1; mn-=rg*0.18; mx+=rg*0.18;
+  /* Un conteo no tiene valores negativos: sin este tope el relleno del eje
+     dibuja un "-1 quests" que no existe. */
+  if(opts.min!=null&&mn<opts.min) mn=opts.min;
+  if(opts.max!=null&&mx>opts.max) mx=opts.max;
+  const Y=v=>PT+(1-(v-mn)/(mx-mn))*(H-PT-PB);
+  const n=items.length, slot=(W-PL-PR)/n;
+  const bw=Math.max(5,Math.min(26,slot-4));   // 4 u ≈ 2px de hueco; el tope evita bloques gruesos
+  let g='';
+  if(opts.band){ const y1=Y(opts.band.hi), y2=Y(opts.band.lo);
+    g+='<rect x="'+PL+'" y="'+y1.toFixed(1)+'" width="'+(W-PL-PR)+'" height="'+Math.max(1,y2-y1).toFixed(1)+
+       '" fill="rgba(57,217,138,.14)"/>'; }
+  [mn,mx].forEach(v=>{ const y=+Y(v).toFixed(1);
+    g+='<line x1="'+PL+'" y1="'+y+'" x2="'+(W-PR)+'" y2="'+y+'" stroke="'+CHART_GRID+'" stroke-width="1"/>'+
+       txt(PL-5,(y+3.5).toFixed(1),fm(v),"end"); });
+  const y0=+Y(0).toFixed(1);
+  g+='<line x1="'+PL+'" y1="'+y0+'" x2="'+(W-PR)+'" y2="'+y0+'" stroke="'+CHART_GRID+'" stroke-width="1"/>';
+  items.forEach((it,i)=>{
+    const x=PL+i*slot+(slot-bw)/2, y=Y(it.v);
+    g+='<rect x="'+x.toFixed(1)+'" y="'+Math.min(y,y0).toFixed(1)+'" width="'+bw.toFixed(1)+
+       '" height="'+Math.max(1.5,Math.abs(y-y0)).toFixed(1)+'" rx="3.5" fill="'+safeColor(it.c)+
+       '"><title>'+esc((it.t||"")+" · "+fm(it.v))+'</title></rect>';
+    /* etiqueta directa selectiva: el último y los que se salen de la banda */
+    if(it.mark||i===n-1) g+=txt((x+bw/2).toFixed(1),(Math.min(y,y0)-5).toFixed(1),fm(it.v),"middle",9.5,"#a3b4d2",true);
+  });
+  g+=txt(PL,H-5,dshort(items[0].d))+txt(W-PR,H-5,dshort(items[n-1].d),"end");
+  return '<svg class="cht" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.alt||"")+'">'+g+'</svg>';
+}
+
+function miniSpark(vals,color){
+  const v=vals.filter(x=>typeof x==="number"&&isFinite(x));
+  if(v.length<2) return '<svg class="msp" viewBox="0 0 74 22"></svg>';
+  const mn=Math.min.apply(null,v),mx=Math.max.apply(null,v),rg=(mx-mn)||1;
+  const pts=v.map((x,i)=>(2+(i/(v.length-1))*70).toFixed(1)+","+(19-((x-mn)/rg)*16).toFixed(1)).join(" ");
+  return '<svg class="msp" viewBox="0 0 74 22" aria-hidden="true"><polyline points="'+pts+
+    '" fill="none" stroke="'+safeColor(color)+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+/* ============================================================
+   TAB: PROGRESO
    ============================================================ */
 function row(k,v,extra){ return '<div class="mrow"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+(extra||"")+'</span></div>'; }
+
+/* Δ de peso normalizado a kg/semana entre mediciones consecutivas.
+   Normalizar por días importa: dos mediciones con 10 días en medio no son
+   "una semana" y leerlas como tal infla el ritmo. */
+function ritmoData(){
+  const list=sortedM().filter(m=>typeof m.weight==="number"), out=[];
+  for(let i=1;i<list.length;i++){
+    const a=list[i-1], b=list[i], dias=dnum(b.date)-dnum(a.date);
+    if(!(dias>0)) continue;
+    out.push({d:b.date, kg:(b.weight-a.weight)*7/dias, peso:b.weight});
+  }
+  return out;
+}
+/* Clasifica el ritmo SIN zonas muertas: toda lectura cae en exactamente una rama.
+   Las reglas son las mismas que usa coachRead() — si una cambia, cambian las dos. */
+function ritmoPanel(){
+  const raw=ritmoData(); if(!raw.length) return '';
+  const fase=faseActual();
+  const pc=raw[raw.length-1].peso||85;
+  let band,titulo,unidad;
+  if(fase==="corte"){ band={lo:pc*0.005,hi:pc*0.01}; titulo="RITMO DE CORTE"; unidad="kg perdidos por semana"; }
+  else if(fase==="volumen"){ band={lo:0.2,hi:0.4}; titulo="RITMO DE VOLUMEN"; unidad="kg ganados por semana"; }
+  else { band={lo:-0.3,hi:0.3}; titulo="RITMO EN MANTENIMIENTO"; unidad="cambio de peso por semana"; }
+  const signo=fase==="corte"?-1:1;
+  const items=raw.map(r=>{
+    const v=r.kg*signo; let c=CHART_INK, mark=false;
+    if(v>=band.lo&&v<=band.hi) c="#39d98a";
+    else if(v>band.hi||v<Math.min(band.lo,0)-0.3){ c="#ff5f6d"; mark=true; }
+    return {v:v,c:c,mark:mark,d:r.d,t:"sem del "+r.d};
+  });
+  const ult=items.slice(-4), prom=ult.reduce((a,x)=>a+x.v,0)/ult.length;
+  const dentro=items.filter(x=>x.c==="#39d98a").length;
+  let h='<div class="pnl"><div class="ptit">'+esc(titulo)+'</div>'+
+    '<div class="hero">'+esc((Math.round(prom*100)/100).toFixed(2))+' <small>KG/SEM</small></div>'+
+    '<div class="muted">Promedio de las últimas '+ult.length+' mediciones. '+
+    'La banda verde es '+esc(band.lo.toFixed(2))+'–'+esc(band.hi.toFixed(2))+' kg/sem'+
+    (fase==="corte"?' — el 0.5–1% de tu peso, el rango que protege músculo.':'.')+'</div>';
+  h+='<div class="lgd"><span><i style="background:#39d98a"></i>EN RANGO</span>'+
+     '<span><i style="background:'+CHART_INK+'"></i>LENTO O ESTABLE</span>'+
+     '<span><i style="background:#ff5f6d"></i>FUERA DE RANGO</span></div>';
+  h+=chartBars(items,{band:band,alt:unidad+", contra la banda objetivo"});
+  h+='<div class="note">'+esc(unidad)+' · '+dentro+' de '+items.length+' mediciones dentro de la banda. '+
+     'Cada barra es el cambio entre dos mediciones, dividido entre los días reales que pasaron.</div></div>';
+  return h;
+}
+
+/* Cintura y brazo comparten un solo eje porque van indexados a la primera
+   lectura = 100. Con eje doble (cm de cintura vs cm de brazo) la gráfica
+   inventaría una correlación que no está en los datos. */
+function composicionPanel(){
+  const list=sortedM().filter(m=>typeof m.waist==="number"&&typeof m.armR_flex==="number");
+  if(list.length<2) return '';
+  const w0=list[0].waist, a0=list[0].armR_flex;
+  const sc=[{n:"CINTURA",c:CHART_A,pts:list.map((m,i)=>({i:i,v:m.waist/w0*100,t:m.date}))},
+            {n:"BRAZO D FUERZA",c:CHART_B,pts:list.map((m,i)=>({i:i,v:m.armR_flex/a0*100,t:m.date}))}];
+  const dw=list[list.length-1].waist-w0, da=list[list.length-1].armR_flex-a0;
+  let lec;
+  if(dw<=-0.5&&da>=-0.8) lec=['ok','Cintura '+dw.toFixed(1)+' cm con el brazo en '+(da>0?"+":"")+da.toFixed(1)+
+    ' cm. Estás perdiendo grasa sin pagar músculo.'];
+  else if(dw<=-0.5) lec=['','Cintura '+dw.toFixed(1)+' cm, pero el brazo bajó '+Math.abs(da).toFixed(1)+
+    ' cm con ella. Es la señal de que falta proteína o sobra déficit.'];
+  else lec=['','La cintura lleva '+(dw>0?"+":"")+dw.toFixed(1)+' cm desde el baseline. Todavía poco para leer tendencia.'];
+  return '<div class="pnl"><div class="ptit v">GRASA vs MÚSCULO</div>'+
+    '<div class="muted">Las dos medidas indexadas a tu primera lectura = 100, en un solo eje. '+
+    'Cintura abajo y brazo plano es el mejor escenario del corte.</div>'+
+    chartLine(sc,{ref:100,refLabel:"BASELINE",n:list.length,alt:"cintura y brazo indexados al baseline",
+                  fm:v=>(Math.round(v*10)/10).toFixed(1)})+
+    '<div class="alert '+lec[0]+'">'+lec[1]+'</div></div>';
+}
+
+/* weightHistory lleva guardando {peso,fecha} por ejercicio desde la v3.4 y hasta
+   la v8.5 no se le mostraba a nadie: solo se usaba para migrar records. */
+function fuerzaPanel(){
+  const filas=[];
+  S.routine.days.forEach(d=>d.ex.forEach(e=>{
+    const hs=(S.weightHistory[e.uid]||[]).filter(x=>x&&isFinite(x.w)&&x.w>0);
+    if(!hs.length) return;
+    filas.push({n:e.n,c:safeColor(d.c),hs:hs,pr:S.allTimeWeights[e.uid]});
+  }));
+  if(!filas.length) return '<div class="pnl"><div class="ptit g">FUERZA</div>'+
+    '<div class="muted">Todavía sin historial de cargas. En cuanto escribas pesos en las quests, cada ejercicio arma su propia curva aquí.</div></div>';
+  filas.sort((a,b)=>{const x=a.hs[a.hs.length-1].d,y=b.hs[b.hs.length-1].d; return x<y?1:x>y?-1:0;});
+  let h='<div class="pnl"><div class="ptit g">FUERZA · '+filas.length+'</div>'+
+    '<div class="muted">Tu carga registrada por ejercicio, del más reciente al más viejo. El número es el PR y el delta va contra tu primer registro.</div>';
+  filas.forEach(f=>{
+    const v=f.hs.map(x=>x.w), d=v[v.length-1]-v[0];
+    h+='<div class="frow"><span class="fn" title="'+esc(f.n)+'">'+esc(f.n)+'</span>'+
+       '<span class="fs">'+miniSpark(v,CHART_A)+'</span>'+
+       '<span class="fv">'+esc((f.pr!=null?f.pr:v[v.length-1])+" kg")+
+       (v.length>1?' <span class="dlt '+(d>0.05?"up":d<-0.05?"dn":"eq")+'">'+(d>0?"+":"")+
+         (Math.round(d*10)/10)+'</span>':'')+'</span></div>';
+  });
+  return h+'<div class="note">El tonelaje real (peso × reps × series) no se puede reconstruir hacia atrás: el historial guarda el peso, no las repeticiones. Eso llega con el modelo de series de la v9.</div></div>';
+}
+
+const PROGM=[{k:"weight",l:"PESO",u:"kg"},{k:"waist",l:"CINTURA",u:"cm"},{k:"ratio",l:"CINT/EST",u:""},
+  {k:"chest",l:"PECHO",u:"cm"},{k:"shoulders",l:"HOMBROS",u:"cm"},
+  {k:"armR_flex",l:"BRAZO D FUERZA",u:"cm"},{k:"calfR",l:"PANTORRILLA D",u:"cm"}];
+function cuerpoPanel(){
+  const alt=(S.gen&&S.gen.altura)?+S.gen.altura:0;
+  const sel=PROGM.find(m=>m.k===progMetric)||PROGM[0];
+  const list=sortedM();
+  const val=m=> sel.k==="ratio" ? ((alt>100&&m.waist!=null)?m.waist/alt:null) : (m[sel.k]!=null?m[sel.k]:null);
+  const pts=[]; list.forEach((m,i)=>{ const v=val(m); if(v!=null) pts.push({i:i,v:v,t:m.date}); });
+  let h='<div class="pnl"><div class="ptit">CUERPO</div><div class="chips2">'+
+    PROGM.map(m=>'<span class="chp'+(m.k===progMetric?" on":"")+'" data-pm="'+m.k+'">'+esc(m.l)+'</span>').join("")+
+    '</div><div style="height:10px"></div>';
+  if(sel.k==="ratio"&&alt<=100)
+    h+='<div class="muted">Para cintura/estatura hace falta tu estatura. Está en el generador, en RUTINA.</div>';
+  else if(pts.length<2)
+    h+='<div class="muted">Aún no hay dos registros de '+esc(sel.l.toLowerCase())+'. En cuanto midas otra vez sale la curva.</div>';
+  else h+=chartLine([{n:sel.l,c:CHART_A,pts:pts}],{n:list.length,
+        ref:sel.k==="ratio"?0.53:null, refLabel:"0.53",
+        fm:sel.k==="ratio"?(v=>v.toFixed(3)):(v=>(Math.round(v*10)/10).toFixed(1)),
+        alt:sel.l+" a lo largo del tiempo"})+
+      '<div class="note">'+esc(sel.l+(sel.u?" en "+sel.u:""))+' · '+pts.length+' registros'+
+      (sel.k==="ratio"?'. La línea es el umbral de referencia 0.53.':'.')+'</div>';
+  return h+'</div>';
+}
+
+function adherenciaPanel(){
+  const wl=(S.weekLog||[]).filter(x=>x.nd>0);
+  if(!wl.length) return '';
+  const items=wl.map(x=>({v:x.q,c:x.full?"#39d98a":CHART_A,d:x.d,t:"semana "+x.w}));
+  const total=wl.reduce((a,x)=>a+x.q,0), meta=wl.reduce((a,x)=>a+x.nd,0);
+  return '<div class="pnl"><div class="ptit v">ADHERENCIA</div>'+
+    '<div class="hero">'+Math.round(total/meta*100)+'<small>%</small></div>'+
+    '<div class="muted">'+total+' de '+meta+' quests en '+wl.length+' semana'+(wl.length===1?'':'s')+' cerrada'+(wl.length===1?'':'s')+'.</div>'+
+    '<div class="lgd"><span><i style="background:#39d98a"></i>SEMANA COMPLETA</span>'+
+    '<span><i style="background:'+CHART_A+'"></i>SEMANA PARCIAL</span></div>'+
+    chartBars(items,{fm:v=>String(Math.round(v)),min:0,max:Math.max.apply(null,wl.map(x=>x.nd)),
+                     alt:"quests completadas por semana"})+
+    '<div class="note">Quests completadas por semana. El registro arranca en la primera semana que cierres con esta versión — no se puede reconstruir hacia atrás.</div></div>';
+}
+
+function dolorPanel(){
+  const log=(S.painLog||[]).filter(x=>x.z);
+  if(!log.length) return '';
+  /* 8 zonas es más de las ~7 clases que aguanta el color: va como tabla con
+     sparkline por zona, no como 8 series de colores distintos. */
+  let h='<div class="pnl"><div class="ptit">DOLOR · '+log.length+' registros</div>'+
+    '<div class="muted">Dolor durante la sesión, por zona, en orden de registro. Es tu reporte, no un diagnóstico.</div>';
+  ZONAS.forEach(z=>{
+    const e=log.filter(x=>x.z===z); if(!e.length) return;
+    const v=e.map(x=>x.dur), ult=v[v.length-1];
+    h+='<div class="frow"><span class="fn">'+esc(ZONA_ES[z])+'</span>'+
+       '<span class="fs">'+miniSpark(v,ult>=4?"#ff5f6d":CHART_A)+'</span>'+
+       '<span class="fv">'+esc("últ "+ult+"/10")+' <span class="dlt eq">'+e.length+' reg</span></span></div>';
+  });
+  return h+'<div class="note">El semáforo de dolor viene de rehabilitación de tendinopatía; no está validado para dolor articular en general.</div></div>';
+}
+
 function renderStats(){
   const xp=totalXP(), L=levelFrom(xp), R=rankOf(L.lv);
   const nextR=RANKS.slice().reverse().find(r=>r.lv>L.lv);
@@ -1767,6 +2058,8 @@ function renderStats(){
      row("Rutina",S.routine.name)+row("Quests completadas",cleared+" / "+nd)+
      row("XP de esta semana",String(weekXP(S.checked)))+
      row("Bono de semana completa",(nd&&cleared===nd)?"disponible (+"+XP_WEEK_CLEAR+")":"bloqueado")+'</div>';
+
+  h+=ritmoPanel()+composicionPanel()+fuerzaPanel()+cuerpoPanel()+adherenciaPanel()+dolorPanel();
 
   h+='<div class="pnl"><div class="ptit g">RECORDS ALL-TIME</div>';
   const any=S.routine.days.some(d=>d.ex.some(e=>S.allTimeWeights[e.uid]!==undefined));
@@ -2861,6 +3154,9 @@ document.addEventListener("click",e=>{
     syncWake();
     return; }
 
+  const pm=t.closest("[data-pm]");
+  if(pm){ progMetric=pm.dataset.pm; render(); return; }
+
   const tech=t.closest("[data-tech]");
   if(tech){ const k=tech.dataset.tech; if(openTech[k]) delete openTech[k]; else openTech[k]=1; render(); return; }
 
@@ -3061,7 +3357,9 @@ function closeWeek(){
     "\n\nSe borran checks y pesos de la semana. Records e historial se conservan.")) return;
   flushNow(); backup("cierre semana "+S.week,S);
   stopRest(false); releaseWake();
-  S.xpBase=(S.xpBase||0)+weekXP(S.checked)+(full?XP_WEEK_CLEAR:0);
+  const ganado=weekXP(S.checked)+(full?XP_WEEK_CLEAR:0);
+  S.weekLog=(S.weekLog||[]).concat([{w:S.week||1,d:today(),q:cleared,nd:nd,xp:ganado,full:full}]).slice(-200);
+  S.xpBase=(S.xpBase||0)+ganado;
   S.lastWeights=Object.assign({},S.weights);
   S.prev=Object.assign({},S.prev);                 // la carga de esta semana pasa a ser "la última vez"
   const hoy=today();
