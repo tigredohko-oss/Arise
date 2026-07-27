@@ -129,6 +129,22 @@ nav button.on{color:var(--cy);border-color:rgba(79,214,255,.55);background:rgba(
 .tech .terr{font-size:12.5px;color:#ffc9a3;line-height:1.5;margin-top:5px}
 .tech .tyt{display:inline-block;margin-top:9px;font-family:var(--mn);font-size:12.5px;color:var(--cy);
   border:1px solid var(--line2);border-radius:7px;padding:7px 11px;text-decoration:none}
+.improw{display:flex;gap:7px;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(29,43,71,.45)}
+.improw:last-child{border-bottom:none}
+.improw .ic{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.improw .is{flex:0 0 84px}
+.improw input{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);border-radius:7px;
+  color:var(--tx);font-family:var(--sf);font-size:13.5px;padding:8px 9px;outline:none}
+.improw input.mono{font-family:var(--mn);font-size:12.5px;color:var(--dim)}
+.improw input:focus{border-color:var(--cy)}
+.mtag{font-family:var(--mn);font-size:11.5px;padding:2px 6px;border-radius:4px;border:1px solid var(--line);
+  color:var(--dim2);white-space:nowrap}
+.mtag.ok{color:var(--ok);border-color:rgba(57,217,138,.45)}
+.mtag.no{color:var(--gd);border-color:rgba(255,202,79,.4)}
+.sline{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(29,43,71,.4);font-size:12.5px}
+.sline:last-child{border-bottom:none}
+.sline .sn{flex:0 0 34px;font-family:var(--mn);font-size:11.5px;color:var(--dim2)}
+.sline .st{flex:1;min-width:0;color:var(--dim);word-break:break-word}
 .favg{font-family:var(--mn);font-size:12.5px;letter-spacing:.14em;color:var(--dim2);margin:12px 0 6px}
 .tech .attr{font-family:var(--mn);font-size:12px;color:var(--dim2);margin-top:8px}
 .proto b{font-family:var(--mn);font-size:12px;letter-spacing:.14em;color:var(--dim2);flex:0 0 74px}
@@ -338,7 +354,7 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 
 <div id="app">
   <header>
-    <div class="vtag" id="vtag">v8.2</div>
+    <div class="vtag" id="vtag">v8.3</div>
     <div id="wakedot" class="hide">PANTALLA ON</div>
     <button class="vtag" id="glosBtn" style="top:46px;right:2px;cursor:pointer">? GLOSARIO</button>
     <div class="brand">A<span>R</span>ISE</div>
@@ -392,7 +408,7 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 /* ============================================================
    ARISE v4.0 — rutina editable, días dinámicos
    ============================================================ */
-const APP_VERSION="8.2", SCHEMA=8;
+const APP_VERSION="8.3", SCHEMA=8;
 const NS="arise";
 const K_ACTIVE=NS+":activeProfile", K_PROFILES=NS+":profiles";
 const LEGACY_STATE="arise_v1", LEGACY_BACKUPS="arise_backups";
@@ -1069,6 +1085,7 @@ function sanitizeRoutine(raw,seq,map){
           const xu="x_"+(++seq.n); if(typeof e.uid==="string") map[e.uid]=xu;
           const o={uid:xu,n:asStr(e.n,120)||"Ejercicio",s:asStr(e.s,60),boss:!!e.boss,note:asStr(e.note,300)};
           const rs=asNum(e.rest,0); if(rs>=10&&rs<=900) o.rest=Math.round(rs);
+          const rf=asStr(e.ref,120); if(rf) o.ref=rf;     // enlace con la base para la ficha de técnica
           return o;
         })};
     })};
@@ -1113,6 +1130,7 @@ function sanitizeState(raw){
     excluirTags:asArr(sgen.excluirTags).filter(x=>typeof x==="string").slice(0,20),
     favoritos:asArr(sgen.favoritos).filter(x=>typeof x==="string").slice(0,40)
   }:null;
+  out.impLast=asStr(s.impLast,20000);
   out.proposal=null;                       // una propuesta nunca sobrevive a un import
   const sp=asObj(s.pain), spz=asObj(sp.zonas), spb=asObj(sp.banderas);
   out.pain={zonas:{},banderas:{}};
@@ -1157,7 +1175,7 @@ function blank(){
   return {schema:SCHEMA,app:APP_VERSION,profile:"default",uidSeq:0,routine:null,
     checked:{},weights:{},sets:{},lastWeights:{},allTimeWeights:{},weightHistory:{},
     measurements:[],photos:[],xp:0,xpBase:0,week:1,active:1,weekBonus:false,
-    prev:{}, settings:{timer:true,sound:true,vibrate:true,wake:true},
+    prev:{}, settings:{timer:true,sound:true,vibrate:true,wake:true}, impLast:"",
     gen:null, proposal:null, pain:{zonas:{},banderas:{}}, painLog:[],
     baselineSeeded:false,lastBackup:null};
 }
@@ -1185,6 +1203,7 @@ function upgrade(st){
   /* schema 7→8: campos del generador. Puramente aditivo — nada existente cambia de forma. */
   if(!st.gen) st.gen=null;
   if(!st.proposal) st.proposal=null;
+  if(typeof st.impLast!=="string") st.impLast="";
   st.pain=Object.assign({zonas:{},banderas:{}},asObj(st.pain));
   st.pain.zonas=asObj(st.pain.zonas); st.pain.banderas=asObj(st.pain.banderas);
   if(!Array.isArray(st.painLog)) st.painLog=[];
@@ -1392,6 +1411,7 @@ const REST_COMPOUND=150, REST_ISO=75;
 const COMPOUND_RE=/press|row|pulldown|pull-?up|chin|deadlift|squat|dip|hip thrust|lunge|prensa|remo|jal[oó]n/i;
 function restFor(e){
   const r=Number(e&&e.rest);
+  if(e&&e.ref&&!(isFinite(r)&&r>=10)){ const src=GENDB.find(x=>x.n===e.ref); if(src&&src.rest) return src.rest; }
   if(isFinite(r)&&r>=10&&r<=900) return Math.round(r);
   if(!e) return REST_ISO;
   if(e.boss) return REST_COMPOUND;
@@ -1534,10 +1554,22 @@ const TEC_ALIAS={
   "Plank + Bicycle":"Plancha (Plank)",
   "Incline DB Press":"Press Inclinado con Mancuernas"
 };
-function tecnicaDe(nombre){
-  const g=GENTEC[nombre]||GENTEC[TEC_ALIAS[nombre]||""];
+const _tecCache={};
+function tecnicaDe(nombre,ref){
+  let clave=nombre;
+  let g=GENTEC[nombre]||GENTEC[TEC_ALIAS[nombre]||""];
+  if(!g&&ref&&GENTEC[ref]){ g=GENTEC[ref]; clave=ref; }
+  if(!g&&!EXDB[nombre]){
+    /* último recurso: emparejado difuso, para que una rutina escrita a mano
+       también reciba ficha sin obligar al usuario a usar nuestros nombres */
+    if(_tecCache[nombre]===undefined){
+      const m=emparejar(nombre,GENDB);
+      _tecCache[nombre]=(m&&GENTEC[m.ex.n])?m.ex.n:null;
+    }
+    if(_tecCache[nombre]){ g=GENTEC[_tecCache[nombre]]; clave=_tecCache[nombre]; }
+  }
   if(g){
-    const src=GENDB.find(x=>x.n===nombre)||GENDB.find(x=>x.n===TEC_ALIAS[nombre]);
+    const src=GENDB.find(x=>x.n===clave)||GENDB.find(x=>x.n===TEC_ALIAS[nombre]);
     const cab=src?(MUS_ES[src.m]||src.m).toUpperCase()+
       (src.syn&&src.syn.length?" · "+src.syn.map(y=>MUS_ES[y[0]]||y[0]).join(", "):"")+
       " · "+src.eq.join(", "):"TÉCNICA";
@@ -1624,7 +1656,7 @@ function exRow(id,e,isCardio){
   h+='<div class="exb"><div class="exn">'+esc(e.n)+(e.boss?'<span class="boss" data-gl="BOSS">BOSS</span>':'')+'</div>';
   h+='<div class="exs">'+esc(e.s)+(isCardio?'':'<span class="restchip">'+restFor(e)+'s</span>')+'</div>';
   if(e.note) h+='<div class="exnote">'+esc(e.note)+'</div>';
-  const tech=!isCardio&&tecnicaDe(e.n);
+  const tech=!isCardio&&tecnicaDe(e.n,e.ref);
   if(tech&&openTech[id]){
     h+='<div class="tech"><div class="tm">'+esc(tech.cab)+'</div><ol>';
     tech.p.forEach(step=>{ h+='<li>'+esc(step)+'</li>'; });
@@ -1645,7 +1677,7 @@ function exRow(id,e,isCardio){
     if(pv) h+='<div class="prev">última vez: '+esc(pv.w)+' kg'+(pv.r?' × '+esc(pv.r):'')+'</div>';
   }
   h+='</div>';
-  if(!isCardio&&tecnicaDe(e.n)) h+='<button class="info'+(openTech[id]?" on":"")+'" data-tech="'+esc(id)+'" title="Cómo se hace">i</button>';
+  if(!isCardio&&tecnicaDe(e.n,e.ref)) h+='<button class="info'+(openTech[id]?" on":"")+'" data-tech="'+esc(id)+'" title="Cómo se hace">i</button>';
   return h+'</div>';
 }
 
@@ -1656,9 +1688,11 @@ function renderRut(){
   const R=S.routine;
   let nEx=R.days.reduce((a,d)=>a+d.ex.length,0);
   let h='<div class="pnl"><div class="ptit v">GENERADOR</div>'+
-    '<div class="muted">Construye una rutina completa desde tus datos, tu equipo y tus articulaciones sensibles. '+
-    'Motor determinista, sin conexión. La propuesta llega aquí como borrador editable — nunca reemplaza tu rutina sola.</div>'+
-    '<div style="height:10px"></div><button class="btn g" id="openGen">⚡ GENERAR RUTINA</button>'+
+    '<div class="muted">Si ya tienes una rutina que te funciona, pégala y la app la lee. '+
+    'Si no tienes ninguna, el generador arma una desde tus datos — pero un motor de reglas no tiene el criterio '+
+    'de alguien que sabe: úsalo como punto de partida, no como programa final.</div>'+
+    '<div style="height:10px"></div><button class="btn g" id="openImp">📋 IMPORTAR MI RUTINA</button>'+
+    '<div style="height:7px"></div><button class="btn sm" id="openGen">⚡ GENERARLA DESDE CERO</button>'+
     (S.painLog&&S.painLog.length?'<div style="height:7px"></div><button class="btn sm" id="openPain">SEMÁFORO DE DOLOR · '+S.painLog.length+' registros</button>':'')+
     '</div>';
   h+='<div class="pnl"><div class="ptit">RUTINA</div>'+
@@ -1985,6 +2019,231 @@ function parseImport(txt){
 }
 
 /* ============================================================
+   v8.3 · IMPORTADOR DE RUTINAS ESCRITAS A MANO
+   Un motor de reglas no tiene el criterio de alguien que sabe. Si ya tienes
+   una rutina buena, lo correcto es meterla, no que la app se invente otra.
+   ============================================================ */
+
+const NORM = s => String(s||"")
+  .toLowerCase()
+  .normalize("NFD").replace(/[̀-ͯ]/g,"")
+  .replace(/[^a-z0-9\s]/g," ")
+  .replace(/\s+/g," ").trim();
+
+/* 4x8-10 · 4 x 8 · 4×10 · 3 series de 12 · 3 sets x 12 · 4 series 8/10 */
+const RE_SETS = /(\d{1,2})\s*(?:x|×|\*|series?\s*(?:de\s*|x\s*)?|sets?\s*(?:of\s*|x\s*)?)\s*(\d{1,3})(?:\s*(?:[-–—/a]|\s+a\s+)\s*(\d{1,3}))?/i;
+/* al revés: "8-10 reps x 4 series" */
+const RE_SETS_INV = /(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?\s*(?:reps?|repeticiones?)\s*(?:x|×|por)\s*(\d{1,2})\s*(?:series?|sets?)/i;
+/* sin multiplicador: "3 series" o "12 reps" sueltos */
+const RE_SOLO_SERIES = /(\d{1,2})\s*(?:series?|sets?)\b/i;
+const RE_SOLO_REPS   = /(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?\s*(?:reps?|repeticiones?)\b/i;
+
+const RE_RIR   = /\bRIR\s*[:=]?\s*(\d)(?:\s*[-–]\s*(\d))?/i;
+const RE_DESC  = /\b(?:descanso|rest|pausa)\s*[:=]?\s*(\d{1,3})\s*(s|seg|segundos|m|min|minutos|')?/i;
+const RE_PESO  = /(\d{1,3}(?:[.,]\d)?)\s*(kg|kgs|lb|lbs|libras)\b/i;
+const RE_LADO  = /\b(?:por|cada|x)\s*(?:lado|pierna|brazo)\b|\bunilateral\b|\b\/\s*lado\b/i;
+
+const DIAS_SEMANA = "lunes|martes|miercoles|jueves|viernes|sabado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday";
+const RE_DIA_NUM  = new RegExp("^\\s*(?:d[ií]a|day|sesi[oó]n|session|entrenamiento|workout|rutina)\\s*[:#\\-–]?\\s*(\\d{1,2}|[a-f])\\b","i");
+const RE_DIA_SEM  = new RegExp("^\\s*(?:"+DIAS_SEMANA+")\\b","i");
+const RE_DIA_LETRA= /^\s*([a-f])\s*[\)\.\-–:]\s*\S/i;
+const RE_DIA_TIPO = /^\s*(push|pull|legs|piernas?|upper|lower|full\s*body|torso|tren\s+(?:superior|inferior)|pecho|espalda|brazos?|hombros?|gl[uú]teos?)\b/i;
+
+/* ruido típico de PDFs y capturas */
+const RE_RUIDO = /^\s*(?:p[aá]g(?:ina)?\.?\s*\d+|\d+\s*\/\s*\d+|www\.|https?:|copyright|©|todos los derechos)/i;
+const RE_ENCABEZADO_TABLA = /^\s*(?:ejercicio|exercise|series|sets|reps?|repeticiones|descanso|rest|peso|carga)(?:\s*[|\t,;]\s*(?:ejercicio|exercise|series|sets|reps?|repeticiones|descanso|rest|peso|carga|nota[s]?))+\s*$/i;
+
+function esDia(linea){
+  const t=linea.trim();
+  if(!t) return false;
+  if(RE_DIA_NUM.test(t)||RE_DIA_SEM.test(t)) return true;
+  if(RE_DIA_LETRA.test(t)&&!RE_SETS.test(t)) return true;
+  if(RE_SETS.test(t)) return false;                       // si trae series, es ejercicio
+  if(RE_DIA_TIPO.test(t)&&t.length<60) return true;
+  /* línea corta en MAYÚSCULAS sin dígitos: casi siempre es un encabezado */
+  const letras=t.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g,"");
+  if(letras.length>=3&&t.length<60&&letras===letras.toUpperCase()&&!/\d/.test(t)) return true;
+  return false;
+}
+
+function limpiaNombre(s){
+  return String(s)
+    .replace(/^\s*(?:[-–—•*·▪◦]|\d{1,2}\s*[\).\-–:])\s*/,"")   // viñetas y numeración
+    .replace(/\b(?:reps?|repeticiones?|series?|sets?)\b/gi," ")   // sobras del patrón de series
+    .replace(/[()@]/g," ")                                          // símbolos huérfanos
+    .replace(/\s*[|\t;]+\s*$/,"")
+    .replace(/^\s*[-–—:·|,]+\s*/,"")
+    .replace(/\s*[-–—:·|,]+\s*$/,"")
+    .replace(/\s{2,}/g," ")
+    .trim();
+}
+
+function extraeSeries(linea){
+  let m=RE_SETS_INV.exec(linea);
+  if(m) return {sets:+m[3], r1:+m[1], r2:m[2]?+m[2]:null, txt:m[0]};
+  m=RE_SETS.exec(linea);
+  if(m){
+    const sets=+m[1], r1=+m[2], r2=m[3]?+m[3]:null;
+    /* "12x60kg" no es series×reps: si el segundo número es peso, se descarta */
+    if(sets>=1&&sets<=12&&r1>=1&&r1<=100) return {sets:sets,r1:r1,r2:r2,txt:m[0]};
+  }
+  const s=RE_SOLO_SERIES.exec(linea), r=RE_SOLO_REPS.exec(linea);
+  if(s||r) return {sets:s?+s[1]:3, r1:r?+r[1]:null, r2:(r&&r[2])?+r[2]:null,
+                   txt:[s&&s[0],r&&r[0]].filter(Boolean).join(" ")};
+  return null;
+}
+
+function parseLinea(linea){
+  const orig=linea;
+  const ser=extraeSeries(linea);
+  if(!ser) return null;
+
+  let resto=linea;
+  if(ser.txt) resto=resto.replace(ser.txt,"  ");
+
+  const nota=[];
+  const rir=RE_RIR.exec(orig);
+  if(rir){ nota.push("RIR "+rir[1]+(rir[2]?"-"+rir[2]:"")); resto=resto.replace(rir[0]," "); }
+  let rest=null;
+  const de=RE_DESC.exec(orig);
+  if(de){ const v=+de[1], u=(de[2]||"s").toLowerCase();
+    rest=(u[0]==="m"||u==="'")?v*60:v;
+    if(rest<10||rest>900) rest=null;
+    resto=resto.replace(de[0]," "); }
+  const pe=RE_PESO.exec(resto);
+  if(pe){ nota.push(pe[0].trim()); resto=resto.replace(pe[0]," "); }
+  if(RE_LADO.test(orig)) nota.push("por lado");
+
+  /* paréntesis y lo que va tras un separador fuerte son notas */
+  const par=resto.match(/\(([^)]{2,80})\)/);
+  if(par){ nota.push(par[1].trim()); resto=resto.replace(par[0]," "); }
+
+  let nombre=limpiaNombre(resto);
+  /* si quedó un separador con cola, la cola es nota */
+  const corte=nombre.match(/^(.{3,}?)\s*[—·|]\s*(.{2,})$/);
+  if(corte){ nombre=corte[1].trim(); nota.push(corte[2].trim()); }
+  nombre=limpiaNombre(nombre);
+  if(nombre.length<3) return null;
+
+  const reps = ser.r1==null ? "" : (ser.r2?ser.r1+"-"+ser.r2:String(ser.r1));
+  return {
+    n:nombre,
+    s:ser.sets+(reps?"×"+reps:" series"),
+    sets:ser.sets, r1:ser.r1, r2:ser.r2,
+    note:nota.join(" · "),
+    rest:rest,
+    orig:orig.trim()
+  };
+}
+
+const COLORES=["#3b82f6","#f97316","#22c55e","#ef4444","#a855f7","#06b6d4","#ec4899","#f59e0b"];
+
+function parseRutina(texto,opts){
+  opts=opts||{};
+  const lineas=String(texto||"").split(/\r?\n/);
+  const days=[], sueltas=[];
+  let actual=null, nDia=0;
+
+  lineas.forEach((raw,idx)=>{
+    const t=raw.trim();
+    if(!t) return;
+    if(RE_RUIDO.test(t)||RE_ENCABEZADO_TABLA.test(t)) return;
+
+    /* filas de tabla: "Press banca | 4 | 8-10" */
+    let linea=t;
+    if(/[|\t]/.test(t)&&!RE_SETS.test(t)){
+      const cel=t.split(/\s*[|\t]\s*/).filter(Boolean);
+      if(cel.length>=2){
+        const nom=cel[0];
+        const nums=cel.slice(1).join(" x ");
+        if(/\d/.test(nums)) linea=nom+" "+nums;
+      }
+    }
+
+    if(esDia(linea)){
+      nDia++;
+      actual={n:limpiaNombre(linea).toUpperCase().slice(0,60)||("DÍA "+nDia),
+              c:COLORES[(nDia-1)%COLORES.length],
+              stat:(nDia%2)?"STR":"AGI",
+              cardio:opts.cardio||"", ex:[]};
+      days.push(actual);
+      return;
+    }
+
+    const ex=parseLinea(linea);
+    if(ex){
+      if(!actual){
+        nDia++;
+        actual={n:"DÍA "+nDia,c:COLORES[0],stat:"STR",cardio:opts.cardio||"",ex:[]};
+        days.push(actual);
+      }
+      ex.boss=actual.ex.length===0;
+      actual.ex.push(ex);
+    } else {
+      sueltas.push({linea:t,n:idx+1});
+    }
+  });
+
+  /* días vacíos: el encabezado se detectó pero no traía ejercicios */
+  const vacios=days.filter(d=>!d.ex.length).map(d=>d.n);
+  const limpios=days.filter(d=>d.ex.length);
+
+  return {
+    days:limpios,
+    sueltas:sueltas,
+    vacios:vacios,
+    stats:{
+      dias:limpios.length,
+      ejercicios:limpios.reduce((a,d)=>a+d.ex.length,0),
+      series:limpios.reduce((a,d)=>a+d.ex.reduce((b,e)=>b+(e.sets||0),0),0),
+      lineas:lineas.filter(l=>l.trim()).length,
+      sinParsear:sueltas.length
+    }
+  };
+}
+
+/* Sin esto, "peso muerto rumano" emparejaba con "Peso Muerto Convencional":
+   comparten las dos palabras del principio y la que los distingue estaba en otro idioma. */
+const SINONIMOS={
+  "peso":"deadlift","muerto":"deadlift","rumano":"romanian","rumana":"romanian",
+  "sentadilla":"squat","sentadillas":"squat","banca":"bench","banco":"bench",
+  "jalon":"pulldown","jalones":"pulldown","polea":"cable","poleas":"cable",
+  "dominada":"pullup","dominadas":"pullup","pull":"pullup","up":"pullup",
+  "remo":"row","prensa":"press","empuje":"press",
+  "mancuerna":"dumbbell","mancuernas":"dumbbell","barra":"barbell",
+  "inclinado":"incline","inclinada":"incline","declinado":"decline",
+  "femoral":"curl","bicep":"curl","biceps":"curl","tricep":"triceps","tríceps":"triceps",
+  "elevacion":"raise","elevaciones":"raise","talones":"calf","pantorrilla":"calf",
+  "fondos":"dip","fondo":"dip","aperturas":"fly","cruce":"fly","cruces":"fly",
+  "gluteo":"glute","gluteos":"glute","cadera":"hip","empujes":"thrust",
+  "abdominal":"core","abdominales":"core","plancha":"plank",
+  "hombro":"shoulder","hombros":"shoulder","militar":"overhead",
+  "extension":"extension","flexiones":"pushup","lagartijas":"pushup",
+  "bulgara":"bulgarian","zancada":"lunge","zancadas":"lunge","split":"bulgarian"
+};
+function tokens(s){
+  return NORM(s).split(" ").filter(w=>w.length>2).map(w=>SINONIMOS[w]||w);
+}
+
+/* Empareja el nombre escrito a mano con la base, para heredar técnica y descanso.
+   Puntaje por palabras compartidas; sin match si no llega al umbral. */
+function emparejar(nombre,DB){
+  const a=tokens(nombre);
+  if(!a.length) return null;
+  let mejor=null,mejorP=0;
+  DB.forEach(x=>{
+    const b=tokens(x.n);
+    if(!b.length) return;
+    let hit=0;
+    a.forEach(w=>{ if(b.some(y=>y===w||y.indexOf(w)===0||w.indexOf(y)===0)) hit++; });
+    const p=hit/Math.max(a.length,b.length);
+    if(p>mejorP){ mejorP=p; mejor=x; }
+  });
+  return mejorP>=0.5?{ex:mejor,score:mejorP}:null;
+}
+
+
+/* ============================================================
    v8.2 · glosario — ningún acrónimo sin traducir
    ============================================================ */
 const GLOSARIO=[
@@ -2102,7 +2361,123 @@ const EQUIPOS=[["barra","Barra"],["rack","Rack"],["mancuerna","Mancuernas"],["ba
   ["polea","Poleas"],["maquina","Máquinas"],["prensa","Prensa"],["smith","Multipower"],
   ["barra_z","Barra Z"],["kettlebell","Kettlebell"],["banda","Bandas"],["peso_corporal","Peso corporal"]];
 const SEV_TXT=["","Molestia ocasional","Dolor crónico manejado","Dolor reciente o agudo","Diagnóstico con indicación médica"];
-let genForm=null;
+let genForm=null, impTexto="", impRes=null;
+
+/* ---------- importar rutina escrita a mano ---------- */
+function openImp(){
+  impRes=null; impTexto=S.impLast||"";
+  $("#gen").classList.add("on"); $("#genBar").classList.add("on");
+  document.body.style.overflow="hidden"; renderImp();
+}
+function renderImp(){
+  let h='<div class="gtit">IMPORTAR MI RUTINA</div>'+
+    '<div class="gsub">Pega tu rutina tal como la tengas: de tu entrenador, de una nota, de una hoja '+
+    'de cálculo. La app la lee y te la muestra para que la corrijas antes de aplicarla.<br><br>'+
+    '<b>Lo que sí entiende:</b> encabezados de día (DÍA 1, LUNES, A), PUSH…), viñetas, '+
+    '<code>4x8-10</code>, <code>3 series de 12</code>, <code>8-10 reps x 4 series</code>, filas de tabla, '+
+    'RIR, descanso, peso y notas entre paréntesis.<br>'+
+    '<b>Lo que no:</b> fotos y PDFs. Esta app corre sin conexión y no trae lector de imágenes. '+
+    'Si tu rutina es una foto, transcríbela o pásamela por chat y te la convierto.</div>';
+  h+='<textarea id="impTxt" style="min-height:220px" placeholder="DÍA 1 - PECHO Y TRÍCEPS&#10;Press banca 4x8-10&#10;Press inclinado con mancuerna 3x12&#10;Fondos 3x10&#10;&#10;DÍA 2 - ESPALDA&#10;Dominadas 4x6-8&#10;Remo con barra 4x10">'+esc(impTexto)+'</textarea>';
+  h+='<div class="gg" style="margin-top:10px"><div class="gf"><label>CARDIO DE ENTRADA (min)</label>'+
+     '<input inputmode="numeric" id="impCardio" value="'+esc((S.gen&&S.gen.cardio)||10)+'"></div></div>';
+  h+='<div style="height:20px"></div>';
+  $("#genBody").innerHTML=h;
+  $("#genBar").innerHTML='<button class="btn gh" id="genCancel">CERRAR</button>'+
+    '<button class="btn g" id="impRun">LEER RUTINA →</button>';
+}
+function correrImport(){
+  const txt=$("#impTxt")?$("#impTxt").value:impTexto;
+  impTexto=txt;
+  const card=parseInt(($("#impCardio")||{}).value,10);
+  const cardio=(isFinite(card)&&card>0)?(card+" min remadora o escaleras"):"";
+  let r;
+  try{ r=parseRutina(txt,{cardio:cardio}); }
+  catch(err){ toast("NO PUDE LEERLO: "+err.message); return; }
+  if(!r.days.length){
+    toast("NO ENCONTRÉ NINGÚN EJERCICIO");
+    return;
+  }
+  /* enlaza con la base para heredar descanso y ficha de técnica */
+  r.days.forEach(d=>d.ex.forEach(e=>{
+    const m=emparejar(e.n,GENDB);
+    if(m){ e.match=m.ex.n; e.score=m.score; if(!e.rest) e.rest=m.ex.rest; }
+  }));
+  impRes=r; renderImpRev();
+}
+function renderImpRev(){
+  const r=impRes, st=r.stats;
+  let h='<div class="gtit">REVISA ANTES DE APLICAR</div>';
+  h+='<div class="gsub">Leí <b>'+st.dias+' días</b>, <b>'+st.ejercicios+' ejercicios</b> y <b>'+st.series+
+     ' series</b> de '+st.lineas+' líneas. Todo lo de abajo es editable.</div>';
+
+  if(r.sueltas.length){
+    h+='<div class="alert"><b>'+r.sueltas.length+' línea'+(r.sueltas.length>1?'s':'')+' que no entendí.</b> '+
+       'No las tiré: aquí están para que decidas. Si alguna era un ejercicio, agrégalo a mano después de aplicar.</div>';
+    h+='<div class="pnl">';
+    r.sueltas.forEach(x=>{ h+='<div class="sline"><span class="sn">L'+x.n+'</span><span class="st">'+esc(x.linea)+'</span></div>'; });
+    h+='</div>';
+  }
+  if(r.vacios.length){
+    h+='<div class="alert">Estos encabezados no traían ejercicios debajo y se omitieron: '+
+       r.vacios.map(esc).join(" · ")+'</div>';
+  }
+
+  r.days.forEach((d,di)=>{
+    h+='<div class="dayed" style="--dc:'+safeColor(d.c)+'">';
+    h+='<div class="dhead"><span class="num">D'+(di+1)+'</span></div>';
+    h+='<input class="ein" data-idn="'+di+'" value="'+esc(d.n)+'">';
+    h+='<div class="grp">EJERCICIOS · '+d.ex.length+'</div>';
+    d.ex.forEach((e,ei)=>{
+      h+='<div class="improw"><div class="ic">'+
+         '<input data-ien="'+di+'-'+ei+'" value="'+esc(e.n)+'">'+
+         '<input class="mono" data-ienote="'+di+'-'+ei+'" value="'+esc(e.note||"")+'" placeholder="nota (RIR, tempo…)">'+
+         '<div>'+(e.match
+            ? '<span class="mtag ok" title="'+esc(e.match)+'">✓ '+esc(e.match.slice(0,28))+(e.match.length>28?'…':'')+'</span>'
+            : '<span class="mtag no">sin ficha en la base</span>')+
+           (e.rest?' <span class="mtag">descanso '+e.rest+'s</span>':'')+
+           (e.boss?' <span class="boss">BOSS</span>':'')+'</div>'+
+         '</div><div class="is"><input class="mono" data-ies="'+di+'-'+ei+'" value="'+esc(e.s)+'"></div>'+
+         '<button class="mini dz" data-iedel="'+di+'-'+ei+'">✕</button></div>';
+    });
+    h+='</div>';
+  });
+  const conFicha=r.days.reduce((a,d)=>a+d.ex.filter(e=>e.match).length,0);
+  h+='<div class="alert '+(conFicha===st.ejercicios?'ok':'')+'">'+conFicha+' de '+st.ejercicios+
+     ' ejercicios se enlazaron con la base, así que heredan ficha de técnica y descanso sugerido. '+
+     'Los que no, funcionan igual: solo no traen explicación ni timer automático.</div>';
+  h+='<div style="height:20px"></div>';
+  $("#genBody").innerHTML=h;
+  $("#genBar").innerHTML='<button class="btn gh" id="impBack">← TEXTO</button>'+
+    '<button class="btn g" id="impApply">APLICAR</button>';
+}
+function aplicarImport(){
+  if(!impRes||!impRes.days.length) return;
+  if(!confirm("¿Reemplazar tu rutina actual por la importada?\n\n"+impRes.stats.dias+" días · "+
+    impRes.stats.ejercicios+" ejercicios.\n\nSe respalda antes. El XP se conserva y los records migran "+
+    "cuando el nombre coincide.")) return;
+  flushNow(); backup("pre-import-rutina",S);
+  const byName={};
+  S.routine.days.forEach(d=>d.ex.forEach(e=>{
+    if(S.allTimeWeights[e.uid]!==undefined) byName[e.n]={best:S.allTimeWeights[e.uid],hist:S.weightHistory[e.uid]};
+  }));
+  S.xpBase=(S.xpBase||0)+weekXP(S.checked);
+  const cruda={name:"IMPORTADA · "+impRes.stats.dias+" DÍAS",
+    meta:{fase:"Importada",rir:"La que traiga tu rutina",descanso:"Heredado de la base cuando el ejercicio coincide",
+          progresion:"Doble progresión: sube reps dentro del rango; al tope en todas, sube el peso",
+          deload:"Cada 6-8 semanas o al estancarte 2 semanas",
+          recorte:"Si vas corto de tiempo: último ejercicio → penúltimo → nunca el BOSS"},
+    days:impRes.days.map(d=>({n:d.n,c:d.c,stat:d.stat,cardio:d.cardio,
+      ex:d.ex.map(e=>({n:e.n,s:e.s,boss:!!e.boss,note:e.note||"",rest:e.rest||undefined,ref:e.match||undefined}))}))};
+  S.routine=sanitizeRoutine(cruda);
+  const nAT={},nWH={};
+  S.routine.days.forEach(d=>d.ex.forEach(e=>{ const m=priorRecord(byName,e.n);
+    if(m){ nAT[e.uid]=m.best; if(m.hist) nWH[e.uid]=m.hist; } }));
+  S.allTimeWeights=nAT; S.weightHistory=nWH;
+  S.checked={}; S.weights={}; S.sets={}; S.lastWeights={}; S.active=1;
+  S.impLast=impTexto.slice(0,20000); S.proposal=null; S.xp=totalXP();
+  save(); closeGen(); toast("RUTINA IMPORTADA · "+S.routine.days.length+" DÍAS");
+}
 
 function defaultInputs(){
   const m=S.measurements&&S.measurements.length?S.measurements[S.measurements.length-1]:null;
@@ -2316,6 +2691,20 @@ document.addEventListener("click",e=>{
     document.body.style.overflow="hidden"; renderGloss(); return; }
   const gl=t.closest("[data-gl]");
   if(gl){ const g=glosaDe(gl.dataset.gl); if(g) toast(g.k+" = "+g.t); return; }
+  if(t.id==="openImp"){ flushNow(); openImp(); return; }
+  if(t.id==="impRun"){ correrImport(); return; }
+  if(t.id==="impBack"){ impRes=null; renderImp(); return; }
+  if(t.id==="impApply"){ aplicarImport(); return; }
+  const idel=t.closest("[data-iedel]");
+  if(idel&&impRes){ const [di,ei]=idel.dataset.iedel.split("-").map(Number);
+    const d=impRes.days[di]; if(!d) return;
+    d.ex.splice(ei,1);
+    if(!d.ex.length) impRes.days.splice(di,1);
+    else if(!d.ex.some(x=>x.boss)) d.ex[0].boss=true;
+    impRes.stats.dias=impRes.days.length;
+    impRes.stats.ejercicios=impRes.days.reduce((a,x)=>a+x.ex.length,0);
+    impRes.stats.series=impRes.days.reduce((a,x)=>a+x.ex.reduce((b,e)=>b+(e.sets||0),0),0);
+    renderImpRev(); return; }
   if(t.id==="openGen"){ flushNow(); openGen(); return; }
   if(t.id==="openPain"){ flushNow(); $("#gen").classList.add("on"); $("#genBar").classList.add("on");
     document.body.style.overflow="hidden"; renderPain(); return; }
@@ -2439,6 +2828,13 @@ document.addEventListener("input",e=>{
   else if(d.en!==undefined){ const f=findEx(d.en); if(f) f.e.n=el.value; }
   else if(d.es!==undefined){ const f=findEx(d.es); if(f) f.e.s=el.value; }
   else if(d.g!==undefined&&genForm){ genForm[d.g]=el.value; hit=false; }
+  else if(d.idn!==undefined&&impRes){ const x=impRes.days[+d.idn]; if(x) x.n=el.value; hit=false; }
+  else if(d.ien!==undefined&&impRes){ const [a,b]=d.ien.split("-").map(Number);
+    const x=impRes.days[a]&&impRes.days[a].ex[b]; if(x) x.n=el.value; hit=false; }
+  else if(d.ies!==undefined&&impRes){ const [a,b]=d.ies.split("-").map(Number);
+    const x=impRes.days[a]&&impRes.days[a].ex[b]; if(x) x.s=el.value; hit=false; }
+  else if(d.ienote!==undefined&&impRes){ const [a,b]=d.ienote.split("-").map(Number);
+    const x=impRes.days[a]&&impRes.days[a].ex[b]; if(x) x.note=el.value; hit=false; }
   else if(d.enote!==undefined){ const f=findEx(d.enote); if(f) f.e.note=el.value; }
   else if(d.erest!==undefined){ const f=findEx(d.erest);
     if(f){ const v=parseInt(el.value,10);
@@ -2641,6 +3037,8 @@ window.ARISE={get S(){return S},set S(v){S=v},levelFrom,weekXP,totalXP,parseImpo
   restFor,startRest,stopRest,prevOf,prPop,syncWake,restRunning,TIERS,tierOf,paintAvatar,canPlayMp4,
   faseActual,coachRead,FASE_ES,
   generar,GENDB,GENTEC,tecnicaDe,GLOSARIO,glosaDe,aplicarEscala,banderasActivas,
+  parseRutina,parseLinea,esDia,emparejar,limpiaNombre,openImp,correrImport,aplicarImport,
+  get impRes(){return impRes}, set impRes(v){impRes=v},
   sanitizeRoutine,openGen,closeGen,semaforo,zonasActivas,diaTocaZona,pedirDolor,
   derivar,presupuesto,auditar,volumen,segSesion,presupuestoSesionSeg,MUS_AUDIT,MUS_ES,ZONAS,BANDERAS,
   nivelDe,factorEdad,MEV,MAV,PISO_DEFICIT,SPLITS,aplicarPropuesta,get genForm(){return genForm},

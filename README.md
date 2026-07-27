@@ -1,36 +1,33 @@
-# ARISE v8.2
+# ARISE v8.3
 
 Un solo archivo HTML + los assets del avatar. Sin dependencias, sin red, sin analítica.
 
-## Publicar en GitHub Pages
+## Publicar
 
 Los `assets/` ya están en el root del repo. Solo hace falta reemplazar `index.html`.
 
 ⚠️ **Subir un archivo con el mismo nombre por la web de GitHub NO lo reemplaza: lo renombra.**
+Borra primero el `index.html` viejo, luego sube el nuevo. Verifica que diga **v8.3**.
 
-1. Abre `index.html` en el repo → icono de bote de basura → **Commit changes**
-2. **Add file → Upload files** → sube el `index.html` nuevo → **Commit changes**
-3. Espera 1-2 min y recarga la URL. Verifica que arriba a la derecha diga **v8.2**
+## Novedades v8.3 — importar tu propia rutina
 
-## Novedades v8.2
+**RUTINA → 📋 IMPORTAR MI RUTINA.** Pegas tu rutina como la tengas y la app la lee.
 
-**Legibilidad.** Ningún texto por debajo de 11.5px (antes había a 8px) y todo el texto
-cumple contraste AA de WCAG. La prosa dejó de ser monoespaciada. En DATA hay un control
-de tamaño de texto A / A+ / A++ que escala toda la app.
+Entiende encabezados de día (DÍA 1, LUNES, A), PUSH…), viñetas de todo tipo,
+`4x8-10`, `3 series de 12`, `8-10 reps x 4 series`, filas de tabla pegadas de una hoja
+de cálculo, RIR, descanso, peso y notas entre paréntesis.
 
-**Glosario.** Botón `? GLOSARIO` en el header con los 16 términos que la app abrevia.
-Los acrónimos de la pantalla de entrenamiento (BOSS, PR, STR/AGI) se tocan y se traducen.
+**Nada se descarta en silencio.** Lo que no entiende te lo muestra con el número de línea
+para que decidas tú. Después pasas por una pantalla de revisión donde todo es editable
+antes de aplicar.
 
-**Fichas de técnica para todos.** Los 72 ejercicios del generador tienen pasos, clave
-técnica y error común, en español. Antes ninguno tenía. La rutina v5 también las recibe.
-Cada ficha lleva un enlace a búsqueda de video, en lugar de imágenes con licencia ajena.
+Los ejercicios se enlazan con la base interna, así heredan ficha de técnica y descanso
+sugerido aunque los hayas escrito con tus propias palabras.
 
-**El dolor ya no impide entrenar.** Las señales de alerta activan MODO CAUTO: la rutina
-se genera igual, con el mínimo impacto posible en las zonas marcadas, y se avisa claro.
-Antes se negaba a generar.
+**No lee fotos ni PDFs.** La app corre sin conexión y no trae lector de imágenes.
 
-**Ejercicios favoritos.** En el generador eliges los que te gustan y se priorizan al
-armar la rutina. Se agregaron ejercicios con kettlebell (antes no había ninguno).
+El generador sigue ahí, pero como opción secundaria: un motor de reglas no tiene el
+criterio de alguien que sabe.
 
 ## Privacidad
 
