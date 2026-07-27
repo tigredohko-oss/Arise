@@ -1,34 +1,53 @@
-# ARISE v8.3
+# ARISE v8.4
 
-Un solo archivo HTML + los assets del avatar. Sin dependencias, sin red, sin analítica.
+App de una sola página (`index.html`). No necesita servidor, no necesita internet
+después de la primera carga. Tus datos viven en el navegador (`localStorage`),
+nunca salen de tu teléfono.
 
-## Publicar
+## Qué cambia en la v8.4
 
-Los `assets/` ya están en el root del repo. Solo hace falta reemplazar `index.html`.
+**Importar tu propia rutina desde una tabla copiada.**
 
-⚠️ **Subir un archivo con el mismo nombre por la web de GitHub NO lo reemplaza: lo renombra.**
-Borra primero el `index.html` viejo, luego sube el nuevo. Verifica que diga **v8.3**.
+Cuando copias una tabla desde un documento, Word, Notion o un `.md` renderizado,
+el pegado llega "aplanado": cada celda cae en su propio renglón. La v8.3 leía eso
+como texto suelto y encontraba 3 ejercicios de 21.
 
-## Novedades v8.3 — importar tu propia rutina
+La v8.4 detecta ese formato y lo vuelve a armar. Con la rutina UPPER/LOWER v6 CORTE:
 
-**RUTINA → 📋 IMPORTAR MI RUTINA.** Pegas tu rutina como la tengas y la app la lee.
+- antes: 2 días · 3 ejercicios · 154 líneas sin parsear
+- ahora: 4 días · 21 ejercicios · 69 series, con notas, RIR y BOSS intactos
 
-Entiende encabezados de día (DÍA 1, LUNES, A), PUSH…), viñetas de todo tipo,
-`4x8-10`, `3 series de 12`, `8-10 reps x 4 series`, filas de tabla pegadas de una hoja
-de cálculo, RIR, descanso, peso y notas entre paréntesis.
+Además:
 
-**Nada se descarta en silencio.** Lo que no entiende te lo muestra con el número de línea
-para que decidas tú. Después pasas por una pantalla de revisión donde todo es editable
-antes de aplicar.
+- **Nada se descarta en silencio.** Lo que no entró se muestra en dos grupos:
+  "texto con números" (posible ejercicio que se me escapó, con su número de línea)
+  y prosa normal (colapsada con un contador).
+- **`3 rondas`** ahora se entiende aunque esté a mitad de línea.
+- **`pausa 1 s arriba`** ya no se confunde con descanso entre series — es un tempo,
+  se queda como nota.
+- **`por lado`** y **`/ 10-15`** salen del nombre del ejercicio y pasan a la nota.
+- **Guardia de antónimos al emparejar.** `Press declinado con mancuernas` ya NO
+  empareja con `Press Inclinado con Mancuernas`. Distinto ángulo, distinto
+  ejercicio, récord falso. Mismo criterio para sentado/de pie, barra/mancuerna,
+  rumano/convencional, ancho/cerrado, frontal/trasera, unilateral/bilateral.
 
-Los ejercicios se enlazan con la base interna, así heredan ficha de técnica y descanso
-sugerido aunque los hayas escrito con tus propias palabras.
+## Cómo se usa
 
-**No lee fotos ni PDFs.** La app corre sin conexión y no trae lector de imágenes.
+RUTINA → **IMPORTAR MI RUTINA** → pega el texto → revisa lo que leí (puedes editar
+o borrar cualquier renglón ahí mismo) → APLICAR.
 
-El generador sigue ahí, pero como opción secundaria: un motor de reglas no tiene el
-criterio de alguien que sabe.
+Antes de aplicar se guarda un respaldo `pre-import-rutina`. Tu XP, tus récords y
+tus medidas no se tocan.
+
+Lee texto pegado. **No lee fotos ni PDFs.**
+
+## Publicar en GitHub Pages
+
+En la web de GitHub, subir un archivo con el mismo nombre lo *renombra* en vez de
+reemplazarlo. Borra `index.html` del repo primero, confirma el borrado, y después
+sube el nuevo. La carpeta `assets/` solo hace falta subirla una vez.
 
 ## Privacidad
 
-El repo es público. **Nunca subas aquí el JSON que exporta el Data Vault.**
+El repo es público. `index.html` y `assets/` son lo único que va ahí.
+El JSON del Data Vault (pesos, medidas, XP) **nunca** se sube al repo.
