@@ -243,7 +243,10 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 .selbox{background:rgba(5,7,15,.7);border:1px solid var(--line);border-radius:7px;color:var(--dim);
   font-family:var(--mn);font-size:12.5px;padding:8px;outline:none}
 
-#lvup{position:fixed;inset:0;z-index:99;display:none;align-items:center;justify-content:center;
+/* z-index 140: por encima del modal (110), la barra (111), el toast (120) y el
+   pop de PR (130). Estaba en 99 y el PR le caía justo encima — subir de nivel
+   marcando un récord es EXACTAMENTE cuando más pasa. */
+#lvup{position:fixed;inset:0;z-index:140;display:none;align-items:center;justify-content:center;
   background:rgba(2,4,10,.93);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
 #lvup.on{display:flex;animation:fade .3s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
@@ -253,6 +256,9 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 .lvbox .t2{font-family:var(--mn);font-size:54px;font-weight:800;color:#fff;margin:8px 0;
   text-shadow:0 0 22px rgba(79,214,255,.85),0 0 60px rgba(139,124,255,.5)}
 .lvbox .t3{font-size:15.5px;color:var(--dim);letter-spacing:.1em}
+.lvbox .t4{font-family:var(--mn);font-size:11px;color:var(--dim2);letter-spacing:.28em;margin-top:18px;opacity:0;
+  animation:fadein .4s ease .9s forwards}
+@keyframes fadein{to{opacity:1}}
 .rings{position:absolute;width:300px;height:300px;pointer-events:none}
 .rings i{position:absolute;inset:0;border:1px solid rgba(79,214,255,.4);border-radius:50%;animation:rip 2.1s ease-out infinite}
 .rings i:nth-child(2){animation-delay:.6s}.rings i:nth-child(3){animation-delay:1.2s}
@@ -406,6 +412,7 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 
 <div id="lvup"><div class="rings"><i></i><i></i><i></i></div><div class="lvbox">
   <div class="t1">LEVEL UP</div><div class="t2" id="lvnum">2</div><div class="t3" id="lvmsg"></div>
+  <div class="t4">TOCA PARA CONTINUAR</div>
 </div></div>
 <div id="gen"><div class="wrap" id="genBody"></div></div>
 <div class="gbar" id="genBar"></div>
@@ -420,7 +427,7 @@ textarea{width:100%;background:rgba(5,7,15,.7);border:1px solid var(--line);bord
 /* ============================================================
    ARISE v4.0 — rutina editable, días dinámicos
    ============================================================ */
-const APP_VERSION="8.5", SCHEMA=8;
+const APP_VERSION="8.6", SCHEMA=8;
 const NS="arise";
 const K_ACTIVE=NS+":activeProfile", K_PROFILES=NS+":profiles";
 const LEGACY_STATE="arise_v1", LEGACY_BACKUPS="arise_backups";
@@ -459,6 +466,34 @@ const tierOf=r=>TIERS.find(x=>x.ranks.indexOf(r)>=0)||TIERS[0];
 const COLORS=["#3b82f6","#f97316","#22c55e","#a855f7","#ef4444","#06b6d4","#ec4899","#f59e0b"];
 const STATS=["STR","AGI","VIT","INT","PER"];
 const CARDIO_DEF="10 min remadora o escaleras";
+
+/* ---------- qué cuenta como cardio ----------
+   Un ejercicio de cardio no pide peso ni reps: pide minutos y velocidad.
+   ⚠️ "remo" y "row" a secas son ejercicios de ESPALDA (remo con barra,
+   seated cable row, chest-supported row). Solo la máquina cuenta como cardio,
+   y por eso RE_CARDIO_NO se evalúa primero: un falso positivo aquí le borra
+   a alguien los campos de peso de un ejercicio de fuerza. */
+const RE_CARDIO_NO=/\b(remo|row(s|ing)?)\b(?!.*\b(ergo|erg[oó]metro|m[aá]quina|machine|concept\s*2)\b)/i;
+const RE_CARDIO=new RegExp(
+  "(escalera|escalador|stair|step\\s?mill|stepper|" +
+  "caminadora|cinta\\s+de\\s+correr|treadmill|trotar|trote|correr|running|jogging|" +
+  "remadora|rowing\\s+machine|remo\\s+erg|concept\\s*2|" +
+  "bicicleta|bici\\b|spinning|air\\s?bike|assault\\s?bike|cicloerg|stationary\\s+bike|" +
+  "el[ií]ptica|elliptical|cross\\s?trainer|" +
+  "salto\\s+de\\s+cuerda|cuerda\\s+para\\s+saltar|jump\\s+rope|skipping|" +
+  "caminata|walking|sprints?\\b|liss\\b|hiit\\b|cardio)","i");
+function esCardioNombre(n){
+  const s=String(n||"");
+  if(RE_CARDIO_NO.test(s)&&!/cardio|remadora|erg/i.test(s)) return false;
+  return RE_CARDIO.test(s);
+}
+/* kind explícito gana sobre el nombre: si Dave lo corrigió a mano, se respeta */
+function esCardioEx(e){
+  if(!e) return false;
+  if(e.kind==="cardio") return true;
+  if(e.kind==="fuerza") return false;
+  return esCardioNombre(e.n);
+}
 
 /* ---------- presets de fábrica ---------- */
 /* v5.0 — hipertrofia, evidencia 2024-2025. Frecuencia 2×/músculo, prioridad pecho y espalda,
@@ -1096,6 +1131,7 @@ function sanitizeRoutine(raw,seq,map){
         ex:asArr(d.ex).slice(0,40).map(e=>{ e=asObj(e);
           const xu="x_"+(++seq.n); if(typeof e.uid==="string") map[e.uid]=xu;
           const o={uid:xu,n:asStr(e.n,120)||"Ejercicio",s:asStr(e.s,60),boss:!!e.boss,note:asStr(e.note,300)};
+          if(e.kind==="cardio"||e.kind==="fuerza") o.kind=e.kind;   // solo dos valores, nada más entra
           const rs=asNum(e.rest,0); if(rs>=10&&rs<=900) o.rest=Math.round(rs);
           const rf=asStr(e.ref,120); if(rf) o.ref=rf;     // enlace con la base para la ficha de técnica
           return o;
@@ -1112,6 +1148,7 @@ function sanitizeState(raw){
   out.xpBase=(typeof s.xpBase==="number"&&isFinite(s.xpBase))?s.xpBase:null;
   out.weekBonus=!!s.weekBonus;
   out.baselineSeeded=!!s.baselineSeeded;
+  if(typeof s.seenLevel==="number"&&isFinite(s.seenLevel)) out.seenLevel=Math.max(1,Math.round(s.seenLevel));
   const R=sanitizeRoutine(s.routine,seq,map);
   out.routine=R; out.uidSeq=seq.n;
   /* remapea al uid nuevo; si no hay rutina (import legacy) conserva las claves
@@ -1120,16 +1157,21 @@ function sanitizeState(raw){
     for(const k in v){ if(!Object.prototype.hasOwnProperty.call(v,k)) continue;
       const nk=map[k]||(SAFEKEY_RE.test(k)?k:null); if(nk) o[nk]=f(v[k]); }
     return o;};
+  /* Solo texto o número entran a un campo de texto. Con String(v) a secas, un
+     objeto se guardaba como "[object Object]" en vez de descartarse. */
+  const txtOf=(v,m)=>(typeof v==="string"||typeof v==="number")?asStr(String(v),m):"";
   out.checked        = remap(s.checked,       v=>!!v);
-  out.weights        = remap(s.weights,       v=>asStr(String(v),20));
-  out.sets           = remap(s.sets,          v=>asStr(String(v),40));
-  out.lastWeights    = remap(s.lastWeights,   v=>asStr(String(v),20));
+  out.weights        = remap(s.weights,       v=>txtOf(v,20));
+  out.sets           = remap(s.sets,          v=>txtOf(v,40));
+  /* minutos y velocidad del cardio. Va en su propio mapa a propósito: si se
+     reusara S.weights, el PR y weightHistory tratarían "45 minutos" como un
+     récord de carga y el panel de FUERZA lo graficaría como fuerza. */
+  out.cardioLog      = remap(s.cardioLog, v=>({m:txtOf(asObj(v).m,10), v:txtOf(asObj(v).v,10)}));
+  out.lastWeights    = remap(s.lastWeights,   v=>txtOf(v,20));
   out.allTimeWeights = remap(s.allTimeWeights,v=>asNum(v,0));
   out.weightHistory  = remap(s.weightHistory, v=>asArr(v).slice(-200)
                         .map(h=>({w:asNum(asObj(h).w,0),d:asStr(asObj(h).d,10)})));
-  out.prev = remap(s.prev, v=>({w:asStr(String(asObj(v).w||""),20),
-                                r:asStr(String(asObj(v).r||""),40),
-                                d:asStr(String(asObj(v).d||""),10)}));
+  out.prev = remap(s.prev, v=>({w:txtOf(asObj(v).w,20),r:txtOf(asObj(v).r,40),d:txtOf(asObj(v).d,10)}));
   const sgen=asObj(s.gen);
   out.gen = Object.keys(sgen).length?{
     edad:asNum(sgen.edad,30), sexo:asStr(sgen.sexo,10), peso:asNum(sgen.peso,0),
@@ -1193,7 +1235,7 @@ function newProfileId(){
 
 function blank(){
   return {schema:SCHEMA,app:APP_VERSION,profile:"default",uidSeq:0,routine:null,
-    checked:{},weights:{},sets:{},lastWeights:{},allTimeWeights:{},weightHistory:{},
+    checked:{},weights:{},sets:{},cardioLog:{},lastWeights:{},allTimeWeights:{},weightHistory:{},
     measurements:[],photos:[],xp:0,xpBase:0,week:1,active:1,weekBonus:false,
     prev:{}, settings:{timer:true,sound:true,vibrate:true,wake:true}, impLast:"",
     gen:null, proposal:null, pain:{zonas:{},banderas:{}}, painLog:[], weekLog:[],
@@ -1228,6 +1270,7 @@ function upgrade(st){
   st.pain.zonas=asObj(st.pain.zonas); st.pain.banderas=asObj(st.pain.banderas);
   if(!Array.isArray(st.painLog)) st.painLog=[];
   if(!Array.isArray(st.weekLog)) st.weekLog=[];   // 8→8.5: aditivo, sin migración
+  st.cardioLog=asObj(st.cardioLog);                // 8.5→8.6: aditivo
   st.prev=asObj(st.prev);
   if(from<7){   // arrastra la carga de la semana pasada al formato nuevo {peso, reps}
     const lw=asObj(st.lastWeights);
@@ -1397,6 +1440,23 @@ function playRankTransition(T,lv,R){
 }
 
 let lastLevel=null, lastTier=null;
+/* El nivel visto vive en el ESTADO, no solo en memoria. Antes, si Android mataba
+   la PWA (o recargabas) entre ganar el XP y ver la animación, al arrancar
+   lastLevel se igualaba al nivel actual y la animación se perdía para siempre. */
+function seenLevel(){ return (typeof S.seenLevel==="number")?S.seenLevel:null; }
+/* Con el video de tier, levelUp() no corre hasta que el video termina. Sin esta
+   bandera, cualquier render() en ese rato volvería a lanzar el video encima. */
+let animando=false;
+/* Un level-up pendiente NO se pinta durante el arranque: sería una pantalla
+   completa encima de la app antes de que el usuario toque nada, y además el
+   navegador bloquea la vibración y el sonido sin gesto previo. Se guarda y se
+   muestra en cuanto Dave toca la pantalla. */
+let gesto=false, lvPendiente=null;
+document.addEventListener("pointerdown",()=>{
+  if(gesto) return;
+  gesto=true;
+  if(lvPendiente){ const p=lvPendiente; lvPendiente=null; setTimeout(()=>levelUp(p.lv,p.R),160); }
+},{capture:true,once:true});
 function renderHeader(){
   const xp=totalXP(); S.xp=xp;
   const L=levelFrom(xp), R=rankOf(L.lv);
@@ -1410,17 +1470,29 @@ function renderHeader(){
   $("#wktxt").textContent="SEMANA "+S.week;
   $("#hname").textContent="HUNTER · "+profileName(profile).toUpperCase();
   $("#vtag").textContent="v"+APP_VERSION;
-  if(lastLevel!==null && L.lv>lastLevel){
-    if(lastTier!==null && T.t>lastTier) playRankTransition(T,L.lv,R);   // sube de tier
+  const visto=seenLevel();
+  const subio=(lastLevel!==null && L.lv>lastLevel) || (visto!==null && L.lv>visto);
+  if(subio && !animando){
+    animando=true;
+    if(!gesto){ animando=false; lvPendiente={lv:L.lv,R:R}; }            // se queda esperando el primer toque
+    else if(lastTier!==null && T.t>lastTier) playRankTransition(T,L.lv,R);   // sube de tier
     else levelUp(L.lv,R);                                              // sube de nivel a secas
   }
   lastLevel=L.lv; lastTier=T.t;
 }
+/* Se marca como visto solo cuando la animación ya se pintó, no cuando se ganó
+   el XP: esa es toda la diferencia entre "se te escapó" y "se te mostró". */
 function levelUp(lv,R){
   $("#lvnum").textContent=lv; $("#lvmsg").textContent="RANGO "+R.r+" · "+R.t;
   const o=$("#lvup"); o.classList.add("on");
+  animando=false;
+  if(S.seenLevel!==lv){ S.seenLevel=lv; save(); }
   buzz([28,50,28,50,90]); beep(660,0.22); setTimeout(()=>beep(990,0.3),200);
-  setTimeout(()=>o.classList.remove("on"),2600); o.onclick=()=>o.classList.remove("on");
+  /* Guarda de 900 ms: marcando ejercicios rápido, el siguiente tap mataba la
+     animación antes de que se alcanzara a leer. */
+  const listo=Date.now()+900;
+  clearTimeout(o.__to); o.__to=setTimeout(()=>o.classList.remove("on"),5200);
+  o.onclick=()=>{ if(Date.now()<listo) return; clearTimeout(o.__to); o.classList.remove("on"); };
 }
 
 /* ============================================================
@@ -1441,7 +1513,10 @@ function restFor(e){
   return REST_ISO;
 }
 function setOf(k){ return !S||!S.settings||S.settings[k]!==false; }
-function buzz(pat){ if(!setOf("vibrate")||!navigator.vibrate) return; try{navigator.vibrate(pat||[60,60,150])}catch(e){} }
+/* Sin un gesto previo el navegador RECHAZA vibrate y lo reporta en consola.
+   No es un error de la app, pero ensucia el log y dispara las pruebas. */
+function buzz(pat){ if(!gesto||!setOf("vibrate")||!navigator.vibrate) return;
+  try{navigator.vibrate(pat||[60,60,150])}catch(e){} }
 let AC=null;
 function beep(freq,dur){
   if(!setOf("sound")) return;
@@ -1671,13 +1746,16 @@ function renderQuests(){
   return h;
 }
 function exRow(id,e,isCardio){
+  /* isCardio = el calentamiento fijo del día. Un ejercicio normal también puede
+     ser cardio (escaleras, remadora) y entonces pide lo mismo. */
+  const cardio=isCardio||esCardioEx(e);
   const on=!!S.checked[id], w=S.weights[id]||"", st=S.sets[id]||"", at=S.allTimeWeights[id];
-  let h='<div class="ex'+(isCardio?" cardio":"")+(on?" done":"")+'">';
+  let h='<div class="ex'+(cardio?" cardio":"")+(on?" done":"")+'">';
   h+='<div class="chk'+(on?" on":"")+'" data-chk="'+esc(id)+'"><svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6"/></svg></div>';
   h+='<div class="exb"><div class="exn">'+esc(e.n)+(e.boss?'<span class="boss" data-gl="BOSS">BOSS</span>':'')+'</div>';
-  h+='<div class="exs">'+esc(e.s)+(isCardio?'':'<span class="restchip">'+restFor(e)+'s</span>')+'</div>';
+  h+='<div class="exs">'+esc(e.s)+(cardio?'':'<span class="restchip">'+restFor(e)+'s</span>')+'</div>';
   if(e.note) h+='<div class="exnote">'+esc(e.note)+'</div>';
-  const tech=!isCardio&&tecnicaDe(e.n,e.ref);
+  const tech=!cardio&&tecnicaDe(e.n,e.ref);
   if(tech&&openTech[id]){
     h+='<div class="tech"><div class="tm">'+esc(tech.cab)+'</div><ol>';
     tech.p.forEach(step=>{ h+='<li>'+esc(step)+'</li>'; });
@@ -1689,7 +1767,15 @@ function exRow(id,e,isCardio){
        encodeURIComponent(e.n+" técnica ejercicio")+'">▶ Ver en video</a>';
     h+='</div>';
   }
-  if(!isCardio){
+  if(cardio){
+    const c=S.cardioLog[id]||{m:"",v:""};
+    h+='<div class="inputs"><div class="fld"><label>MIN</label>'+
+       '<input inputmode="decimal" data-cmin="'+esc(id)+'" value="'+esc(c.m||"")+'" placeholder="min"></div>'+
+       '<div class="fld"><label>VELOCIDAD</label>'+
+       '<input inputmode="decimal" data-cvel="'+esc(id)+'" value="'+esc(c.v||"")+'" placeholder="km/h o nivel"></div></div>';
+    const pv=S.prev&&S.prev[id];
+    if(pv&&(pv.w||pv.r)) h+='<div class="prev">última vez: '+esc(pv.w||"—")+' min'+(pv.r?' · vel '+esc(pv.r):'')+'</div>';
+  } else {
     h+='<div class="inputs"><div class="fld"><label>PESO</label>'+
        '<input inputmode="decimal" data-w="'+esc(id)+'" value="'+esc(w)+'" placeholder="kg">'+
        (at!==undefined?'<span class="prbadge" data-gl="PR">PR '+esc(at)+'</span>':'')+'</div>'+
@@ -1698,7 +1784,7 @@ function exRow(id,e,isCardio){
     if(pv) h+='<div class="prev">última vez: '+esc(pv.w)+' kg'+(pv.r?' × '+esc(pv.r):'')+'</div>';
   }
   h+='</div>';
-  if(!isCardio&&tecnicaDe(e.n,e.ref)) h+='<button class="info'+(openTech[id]?" on":"")+'" data-tech="'+esc(id)+'" title="Cómo se hace">i</button>';
+  if(!cardio&&tecnicaDe(e.n,e.ref)) h+='<button class="info'+(openTech[id]?" on":"")+'" data-tech="'+esc(id)+'" title="Cómo se hace">i</button>';
   return h+'</div>';
 }
 
@@ -1747,6 +1833,9 @@ function renderRut(){
         '</div>'+
         '<div class="side">'+
           '<button class="mini'+(e.boss?" on":"")+'" data-eboss="'+esc(e.uid)+'" title="BOSS">★</button>'+
+          '<button class="mini'+(esCardioEx(e)?" on":"")+'" data-ekind="'+esc(e.uid)+
+            '" title="'+(esCardioEx(e)?"Cardio: pide minutos y velocidad":"Fuerza: pide peso y reps")+'">'+
+            (esCardioEx(e)?"🏃":"🏋")+'</button>'+
           '<button class="mini dz" data-edel="'+esc(e.uid)+'">✕</button>'+
         '</div></div>';
     });
@@ -3147,11 +3236,22 @@ document.addEventListener("click",e=>{
     if(nowOn) S.checked[id]=true; else delete S.checked[id];
     save(); render(); buzz([12]);
     if(nowOn){
-      const f=findEx(id);                       // null si es el cardio
-      if(f) startRest(restFor(f.e),f.e.n); else stopRest(false);
+      const f=findEx(id);                       // null si es el cardio del día
+      if(f&&!esCardioEx(f.e)) startRest(restFor(f.e),f.e.n); else stopRest(false);
       acquireWake();
     }
     syncWake();
+    return; }
+
+  /* el interruptor guarda kind EXPLÍCITO en los dos sentidos: si solo guardara
+     "cardio", no habría forma de decirle a la app que se equivocó al detectar */
+  const ek=t.closest("[data-ekind]");
+  if(ek){ const f=findEx(ek.dataset.ekind);
+    if(f){ const era=esCardioEx(f.e);
+      f.e.kind=era?"fuerza":"cardio";
+      if(f.e.kind==="cardio"){ delete S.weights[f.e.uid]; delete S.sets[f.e.uid]; }
+      else delete S.cardioLog[f.e.uid];
+      save(); render(); toast(era?"AHORA PIDE PESO Y REPS":"AHORA PIDE MINUTOS Y VELOCIDAD"); }
     return; }
 
   const pm=t.closest("[data-pm]");
@@ -3295,6 +3395,8 @@ document.addEventListener("input",e=>{
   let hit=true;
   if(d.w!==undefined) S.weights[d.w]=el.value;
   else if(d.s!==undefined) S.sets[d.s]=el.value;
+  else if(d.cmin!==undefined){ const c=S.cardioLog[d.cmin]=S.cardioLog[d.cmin]||{m:"",v:""}; c.m=el.value; }
+  else if(d.cvel!==undefined){ const c=S.cardioLog[d.cvel]=S.cardioLog[d.cvel]||{m:"",v:""}; c.v=el.value; }
   else if(d.rn!==undefined) S.routine.name=el.value;
   else if(d.dn!==undefined){ const x=findDay(d.dn); if(x) x.n=el.value; }
   else if(d.dcard!==undefined){ const x=findDay(d.dcard); if(x) x.cardio=el.value; }
@@ -3364,7 +3466,11 @@ function closeWeek(){
   S.prev=Object.assign({},S.prev);                 // la carga de esta semana pasa a ser "la última vez"
   const hoy=today();
   Object.keys(S.weights).forEach(k=>{ if(S.weights[k]) S.prev[k]={w:String(S.weights[k]),r:String(S.sets[k]||""),d:hoy}; });
-  S.checked={}; S.weights={}; S.sets={}; S.weekBonus=full;
+  /* el cardio también deja rastro de "la última vez"; los ids no chocan con los
+     de fuerza, así que cabe en el mismo mapa sin ensuciarlo */
+  Object.keys(S.cardioLog||{}).forEach(k=>{ const c=S.cardioLog[k];
+    if(c&&(c.m||c.v)) S.prev[k]={w:String(c.m||""),r:String(c.v||""),d:hoy}; });
+  S.checked={}; S.weights={}; S.sets={}; S.cardioLog={}; S.weekBonus=full;
   S.week=(S.week||1)+1; S.active=1; S.xp=totalXP();
   save(); render();
   toast(full?"SEMANA COMPLETA · +"+XP_WEEK_CLEAR+" XP":"SEMANA "+S.week+" INICIADA");
@@ -3424,14 +3530,14 @@ function wireData(){
         app:asStr(asObj(b).app,12), data:asObj(asObj(b).data)}));
       writeJSON(bKey(profile),mios.concat(ajenos).slice(0,MAX_BACKUPS));
     }
-    S=inc; lastLevel=null; lastTier=null; save(); render(); toast("IMPORTADO · "+S.xp+" XP");
+    S=inc; lastLevel=null; lastTier=null; S.seenLevel=levelFrom(totalXP()).lv; save(); render(); toast("IMPORTADO · "+S.xp+" XP");
   };
   $("#btnWipe").onclick=()=>{
     if(!confirm("BORRAR TODO el perfil "+profileName(profile)+"? Irreversible.")) return;
     if(confirm("¿Descargar un respaldo antes de borrar? (recomendado)")) $("#btnDl").click();
     if(!confirm("Última confirmación: se borra todo el historial de este perfil.")) return;
     localStorage.removeItem(sKey(profile)); localStorage.removeItem(bKey(profile));
-    S=upgrade(blank()); lastLevel=null; lastTier=null; save(); render(); toast("PERFIL BORRADO"); };
+    S=upgrade(blank()); lastLevel=null; lastTier=null; S.seenLevel=levelFrom(totalXP()).lv; save(); render(); toast("PERFIL BORRADO"); };
   const addP=$("#addProfile");
   if(addP) addP.onclick=()=>{
     const name=(prompt("Nombre del perfil nuevo:","")||"").trim();
@@ -3465,7 +3571,7 @@ function wireData(){
     const snap=JSON.parse(JSON.stringify(S));
     let rec; try{ rec=upgrade(sanitizeState(x.data)); }
     catch(err){ S=snap; toast("RESPALDO INVÁLIDO"); return; } finally{ S=snap; }
-    S=rec; lastLevel=null; lastTier=null; save(); render(); toast("RESTAURADO"); }; });
+    S=rec; lastLevel=null; lastTier=null; S.seenLevel=levelFrom(totalXP()).lv; save(); render(); toast("RESTAURADO"); }; });
 }
 
 function switchProfile(id,isNew){
@@ -3478,6 +3584,7 @@ function switchProfile(id,isNew){
   stopRest(false); releaseWake();
   lastLevel=levelFrom(totalXP()).lv;        // sin animación de level-up ni video al cambiar
   lastTier=tierOf(rankOf(lastLevel).r).t;
+  if(typeof S.seenLevel!=="number") S.seenLevel=lastLevel;
   S.profile=id; save(); render();
   toast(isNew?"PERFIL CREADO · "+profileName(id):"AHORA ERES "+profileName(id).toUpperCase());
 }
@@ -3503,6 +3610,7 @@ load();
 aplicarEscala();
 lastLevel=levelFrom(totalXP()).lv;
 lastTier=tierOf(rankOf(lastLevel).r).t;
+if(typeof S.seenLevel!=="number"){ S.seenLevel=lastLevel; save(); }   // instalación existente: no animar hacia atrás
 render();
 syncWake();
 if(window.__migrated) setTimeout(()=>toast("DATOS MIGRADOS · "+S.xp+" XP INTACTOS"),600);
@@ -3511,7 +3619,7 @@ else if(window.__routineReset) setTimeout(()=>toast("RUTINA ACTUALIZADA · XP CO
 window.ARISE={get S(){return S},set S(v){S=v},levelFrom,weekXP,totalXP,parseImport,upgrade,save,render,
   sanitizeState,safeColor,profiles,switchProfile,get profile(){return profile},EXDB,
   restFor,startRest,stopRest,prevOf,prPop,syncWake,restRunning,TIERS,tierOf,paintAvatar,canPlayMp4,
-  faseActual,coachRead,FASE_ES,
+  faseActual,coachRead,FASE_ES,esCardioNombre,esCardioEx,
   generar,GENDB,GENTEC,tecnicaDe,GLOSARIO,glosaDe,aplicarEscala,banderasActivas,
   parseRutina,parseLinea,esDia,emparejar,limpiaNombre,openImp,correrImport,aplicarImport,
   get impRes(){return impRes}, set impRes(v){impRes=v},
